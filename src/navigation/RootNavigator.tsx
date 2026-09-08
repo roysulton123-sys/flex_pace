@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Image } from 'react-native';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
 import BottomTabNavigator from './BottomTabNavigator';
@@ -33,7 +33,12 @@ export default function RootNavigator() {
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0A0C' }}>
-        <ActivityIndicator size="large" color="#D7FF00" />
+        <Image 
+          source={require('../../assets/icon.png')} 
+          style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 20 }} 
+          resizeMode="contain" 
+        />
+        <ActivityIndicator size="small" color="#D7FF00" />
       </View>
     );
   }

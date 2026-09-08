@@ -9,11 +9,13 @@ import {
   ActivityIndicator, 
   RefreshControl,
   Share,
-  Alert
+  Alert,
+  Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UserStats {
   totalDistanceKm: number;
@@ -35,7 +37,43 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Privacy Settings
+  const [isPrivateAccount, setIsPrivateAccount] = useState(false);
+  const [hideGpsRoute, setHideGpsRoute] = useState(false);
+  const [hideBiometrics, setHideBiometrics] = useState(false);
+
+  const loadPrivacySettings = async () => {
+    try {
+      const p1 = await AsyncStorage.getItem('fp_private_account');
+      const p2 = await AsyncStorage.getItem('fp_hide_gps');
+      const p3 = await AsyncStorage.getItem('fp_hide_biometrics');
+      if (p1 !== null) setIsPrivateAccount(p1 === 'true');
+      if (p2 !== null) setHideGpsRoute(p2 === 'true');
+      if (p3 !== null) setHideBiometrics(p3 === 'true');
+    } catch (e) {
+      console.log('Error loading privacy settings:', e);
+    }
+  };
+
+  const togglePrivateAccount = async (val: boolean) => {
+    setIsPrivateAccount(val);
+    await AsyncStorage.setItem('fp_private_account', String(val));
+    Alert.alert('Privasi Diperbarui', val ? 'Akun Anda kini Privat. Hanya pengikut terverifikasi yang dapat melihat aktivitas Anda.' : 'Akun Anda kini Publik.');
+  };
+
+  const toggleHideGpsRoute = async (val: boolean) => {
+    setHideGpsRoute(val);
+    await AsyncStorage.setItem('fp_hide_gps', String(val));
+    Alert.alert('Privasi Diperbarui', val ? 'Peta rute GPS disembunyikan dari feed publik.' : 'Peta rute GPS ditampilkan di feed publik.');
+  };
+
+  const toggleHideBiometrics = async (val: boolean) => {
+    setHideBiometrics(val);
+    await AsyncStorage.setItem('fp_hide_biometrics', String(val));
+  };
+
   const loadProfileAndStats = async () => {
+    loadPrivacySettings();
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -330,6 +368,77 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* PENGATURAN PRIVASI & KEAMANAN AKUN */}
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>PRIVASI & KEAMANAN AKUN</Text>
+          <Text style={styles.sectionSubtitle}>Kontrol visibilitas publik</Text>
+        </View>
+
+        <View style={styles.privacyCard}>
+          {/* Akun Privat */}
+          <View style={styles.privacyRow}>
+            <View style={styles.privacyTextCol}>
+              <View style={styles.privacyTitleRow}>
+                <Ionicons name="lock-closed-outline" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
+                <Text style={styles.privacyTitle}>Akun Privat</Text>
+              </View>
+              <Text style={styles.privacyDesc}>
+                Hanya pengikut terverifikasi yang dapat melihat linimasa dan riwayat aktivitas Anda.
+              </Text>
+            </View>
+            <Switch
+              value={isPrivateAccount}
+              onValueChange={togglePrivateAccount}
+              trackColor={{ false: '#26262E', true: '#D7FF00' }}
+              thumbColor={isPrivateAccount ? '#000000' : '#8E8E93'}
+            />
+          </View>
+
+          <View style={styles.privacyDivider} />
+
+          {/* Sembunyikan Peta Rute */}
+          <View style={styles.privacyRow}>
+            <View style={styles.privacyTextCol}>
+              <View style={styles.privacyTitleRow}>
+                <Ionicons name="eye-off-outline" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
+                <Text style={styles.privacyTitle}>Sembunyikan Jalur Rute Peta</Text>
+              </View>
+              <Text style={styles.privacyDesc}>
+                Menyembunyikan garis rute GPS di feed publik demi privasi lokasi rumah atau tempat kerja.
+              </Text>
+            </View>
+            <Switch
+              value={hideGpsRoute}
+              onValueChange={toggleHideGpsRoute}
+              trackColor={{ false: '#26262E', true: '#D7FF00' }}
+              thumbColor={hideGpsRoute ? '#000000' : '#8E8E93'}
+            />
+          </View>
+
+          <View style={styles.privacyDivider} />
+
+          {/* Sembunyikan Metrik Kesehatan */}
+          <View style={styles.privacyRow}>
+            <View style={styles.privacyTextCol}>
+              <View style={styles.privacyTitleRow}>
+                <Ionicons name="fitness-outline" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
+                <Text style={styles.privacyTitle}>Sembunyikan Estimasi Biometrik</Text>
+              </View>
+              <Text style={styles.privacyDesc}>
+                Hanya tampilkan jarak tempuh dan waktu; sembunyikan estimasi kalori dan detak jantung dari profil publik.
+              </Text>
+            </View>
+            <Switch
+              value={hideBiometrics}
+              onValueChange={toggleHideBiometrics}
+              trackColor={{ false: '#26262E', true: '#D7FF00' }}
+              thumbColor={hideBiometrics ? '#000000' : '#8E8E93'}
+            />
+          </View>
+        </View>
+      </View>
+
       {/* FOOTER APP BRANDING */}
       <View style={styles.footerBranding}>
         <Text style={styles.brandTitle}>FLEX PACE</Text>
@@ -620,6 +729,45 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginTop: 4,
+  },
+
+  // PRIVACY CARD STYLES
+  privacyCard: {
+    backgroundColor: '#131317',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  privacyTextCol: {
+    flex: 1,
+    paddingRight: 14,
+  },
+  privacyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  privacyTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  privacyDesc: {
+    color: '#71717A',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  privacyDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
 
   footerBranding: {

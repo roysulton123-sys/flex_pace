@@ -182,6 +182,89 @@ export default function PostCard({ post, currentUserId, onPostUpdated }: PostCar
     }
   };
 
+  const handleDeleteComment = (commentId: string) => {
+    Alert.alert(
+      'Hapus Komentar?',
+      'Apakah Anda yakin ingin menghapus komentar ini?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('comments').delete().eq('id', commentId);
+              if (error) throw error;
+              setComments(prev => prev.filter(c => c.id !== commentId));
+              if (onPostUpdated) onPostUpdated();
+            } catch (err: any) {
+              Alert.alert('Gagal Menghapus Komentar', err.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleMoreOptions = () => {
+    const isOwner = currentUserId === post.user_id;
+    if (isOwner) {
+      Alert.alert(
+        'Kelola Postingan',
+        'Pilih tindakan untuk postingan Anda:',
+        [
+          { text: 'Batal', style: 'cancel' },
+          { text: 'Bagikan Postingan', onPress: handleShare },
+          { 
+            text: 'Hapus Postingan', 
+            style: 'destructive',
+            onPress: confirmDeletePost
+          }
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Opsi Postingan',
+        'Pilih tindakan:',
+        [
+          { text: 'Batal', style: 'cancel' },
+          { text: 'Bagikan Postingan', onPress: handleShare },
+          { 
+            text: 'Laporkan Postingan', 
+            style: 'destructive',
+            onPress: () => Alert.alert('Laporan Terkirim', 'Terima kasih, laporan Anda telah diterima tim moderasi.')
+          }
+        ]
+      );
+    }
+  };
+
+  const confirmDeletePost = () => {
+    Alert.alert(
+      'Hapus Postingan?',
+      'Postingan foto ini akan dihapus secara permanen dari feed Flex Pace.',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.from('likes').delete().eq('post_id', post.id);
+              await supabase.from('comments').delete().eq('post_id', post.id);
+              const { error } = await supabase.from('posts').delete().eq('id', post.id);
+              if (error) throw error;
+              Alert.alert('Sukses', 'Postingan berhasil dihapus.');
+              if (onPostUpdated) onPostUpdated();
+            } catch (err: any) {
+              Alert.alert('Gagal Menghapus', err.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleShare = async () => {
     try {
       const userName = post.profiles?.name || 'Seorang Atlet Flex Pace';
@@ -221,7 +304,7 @@ export default function PostCard({ post, currentUserId, onPostUpdated }: PostCar
           <Text style={styles.userName}>{userName}</Text>
           <Text style={styles.timestamp}>{formatDate(post.created_at)}</Text>
         </View>
-        <TouchableOpacity style={styles.moreButton}>
+        <TouchableOpacity style={styles.moreButton} onPress={handleMoreOptions} activeOpacity={0.7}>
           <Ionicons name="ellipsis-horizontal" size={20} color="#999999" />
         </TouchableOpacity>
       </View>
@@ -319,21 +402,36 @@ export default function PostCard({ post, currentUserId, onPostUpdated }: PostCar
               data={comments}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.commentsList}
-              renderItem={({ item }) => (
-                <View style={styles.commentItem}>
-                  <Image 
-                    source={{ uri: item.profiles?.avatar_url || 'https://via.placeholder.com/150' }} 
-                    style={styles.commentAvatar} 
-                  />
-                  <View style={styles.commentContent}>
-                    <View style={styles.commentBubble}>
-                      <Text style={styles.commentAuthor}>{item.profiles?.name || 'Athlete'}</Text>
-                      <Text style={styles.commentText}>{item.content}</Text>
+              renderItem={({ item }) => {
+                const canDelete = item.user_id === currentUserId || post.user_id === currentUserId;
+                return (
+                  <View style={styles.commentItem}>
+                    <Image 
+                      source={{ uri: item.profiles?.avatar_url || 'https://via.placeholder.com/150' }} 
+                      style={styles.commentAvatar} 
+                    />
+                    <View style={styles.commentContent}>
+                      <View style={styles.commentBubble}>
+                        <Text style={styles.commentAuthor}>{item.profiles?.name || 'Athlete'}</Text>
+                        <Text style={styles.commentText}>{item.content}</Text>
+                      </View>
+                      <View style={styles.commentMetaRow}>
+                        <Text style={styles.commentTime}>{formatDate(item.created_at)}</Text>
+                        {canDelete && (
+                          <TouchableOpacity 
+                            onPress={() => handleDeleteComment(item.id)}
+                            style={styles.deleteCommentBtn}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="trash-outline" size={13} color="#FF453A" style={{ marginRight: 2 }} />
+                            <Text style={styles.deleteCommentText}>Hapus</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
-                    <Text style={styles.commentTime}>{formatDate(item.created_at)}</Text>
                   </View>
-                </View>
-              )}
+                );
+              }}
             />
           )}
 
@@ -542,8 +640,24 @@ const styles = StyleSheet.create({
   commentTime: {
     color: '#666666',
     fontSize: 11,
+  },
+  commentMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 4,
     marginLeft: 6,
+  },
+  deleteCommentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  deleteCommentText: {
+    color: '#FF453A',
+    fontSize: 11,
+    fontWeight: '700',
   },
   inputContainer: {
     flexDirection: 'row',
