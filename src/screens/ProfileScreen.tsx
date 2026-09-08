@@ -10,7 +10,8 @@ import {
   RefreshControl,
   Share,
   Alert,
-  Switch
+  Switch,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -41,6 +42,43 @@ export default function ProfileScreen() {
   const [isPrivateAccount, setIsPrivateAccount] = useState(false);
   const [hideGpsRoute, setHideGpsRoute] = useState(false);
   const [hideBiometrics, setHideBiometrics] = useState(false);
+
+  // Membership Subscription Modal State
+  const [membershipModalVisible, setMembershipModalVisible] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
+  const [paymentMethod, setPaymentMethod] = useState<'qris' | 'va'>('qris');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  const handlePayMembership = async () => {
+    setIsProcessingPayment(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Silakan login terlebih dahulu.");
+
+      await new Promise(res => setTimeout(res, 1500));
+
+      await supabase
+        .from('profiles')
+        .update({ is_premium: true, role: 'organizer' })
+        .eq('id', user.id);
+
+      await AsyncStorage.setItem('@fp_membership_active', 'true');
+      await AsyncStorage.setItem('@fp_membership_plan', selectedPlan);
+      await AsyncStorage.setItem('@fp_membership_date', new Date().toISOString());
+
+      setIsProcessingPayment(false);
+      setMembershipModalVisible(false);
+      loadProfileAndStats();
+
+      Alert.alert(
+        '🎉 Membership Aktif!',
+        `Selamat! Akun Anda kini berstatus Flex Pace PRO Organizer (${selectedPlan === 'yearly' ? 'Paket Tahunan' : 'Paket Bulanan'}). Tampilan akun VIP dan akses buat event telah aktif.`
+      );
+    } catch (err: any) {
+      setIsProcessingPayment(false);
+      Alert.alert('Gagal Aktivasi', err.message || 'Terjadi kesalahan sistem.');
+    }
+  };
 
   const loadPrivacySettings = async () => {
     try {
@@ -207,8 +245,8 @@ export default function ProfileScreen() {
         <View style={styles.glowOrb} />
 
         <View style={styles.avatarRow}>
-          <View style={styles.avatarContainer}>
-            <Image source={{ uri: displayAvatar }} style={styles.avatar} />
+          <View style={[styles.avatarContainer, profile?.is_premium && styles.avatarContainerVip]}>
+            <Image source={{ uri: displayAvatar }} style={[styles.avatar, profile?.is_premium && styles.avatarVip]} />
             <View style={styles.onlineBadge} />
           </View>
 
@@ -216,7 +254,10 @@ export default function ProfileScreen() {
             <View style={styles.nameRow}>
               <Text style={styles.displayName}>{displayName}</Text>
               {profile?.is_premium && (
-                <Ionicons name="checkmark-circle" size={18} color="#D7FF00" style={{ marginLeft: 4 }} />
+                <View style={styles.vipCrownBadge}>
+                  <Ionicons name="trophy" size={11} color="#000000" style={{ marginRight: 3 }} />
+                  <Text style={styles.vipCrownText}>VIP PRO</Text>
+                </View>
               )}
             </View>
             <Text style={styles.handleText}>{handleTag}</Text>
@@ -314,6 +355,52 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color="#D7FF00" />
         </TouchableOpacity>
       </View>
+
+      {/* KARTU VIP MEMBERSHIP / UPGRADE GATEWAY */}
+      {profile?.is_premium ? (
+        <View style={styles.vipMembershipCard}>
+          <View style={styles.vipCardHeader}>
+            <View style={styles.vipCrownIconBox}>
+              <Ionicons name="trophy" size={20} color="#000000" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.vipCardTitle}>FLEX PACE PRO ORGANIZER</Text>
+              <Text style={styles.vipCardStatus}>Status: Berlangganan Aktif (Tahunan/Bulanan)</Text>
+            </View>
+            <View style={styles.vipActiveBadge}>
+              <Text style={styles.vipActiveText}>VIP AKTIF</Text>
+            </View>
+          </View>
+          <View style={styles.vipDivider} />
+          <View style={styles.vipPerksRow}>
+            <View style={styles.vipPerkItem}>
+              <Ionicons name="checkmark-circle" size={14} color="#FFD700" style={{ marginRight: 4 }} />
+              <Text style={styles.vipPerkText}>Akses Penuh Publikasi Event</Text>
+            </View>
+            <View style={styles.vipPerkItem}>
+              <Ionicons name="checkmark-circle" size={14} color="#FFD700" style={{ marginRight: 4 }} />
+              <Text style={styles.vipPerkText}>Lencana Emas & Proteksi Anti-Spam</Text>
+            </View>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity 
+          style={styles.upgradeCard}
+          onPress={() => setMembershipModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.upgradeIconBox}>
+            <Ionicons name="trophy" size={22} color="#FFD700" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.upgradeTitle}>Upgrade ke Membership PRO</Text>
+            <Text style={styles.upgradeDesc}>Buka akses publikasi event Fun Run & dapatkan lencana mahkota emas.</Text>
+          </View>
+          <View style={styles.upgradeBtn}>
+            <Text style={styles.upgradeBtnText}>Langganan</Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* STATS OVERVIEW SECTION */}
       <View style={styles.sectionContainer}>
@@ -444,6 +531,118 @@ export default function ProfileScreen() {
         <Text style={styles.brandTitle}>FLEX PACE</Text>
         <Text style={styles.brandVersion}>v1.0.0 • Designed for Athletes</Text>
       </View>
+
+      {/* MODAL SUBSCRIPTION GATEWAY MEMBERSHIP PRO */}
+      <Modal
+        visible={membershipModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setMembershipModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.membershipModalCard}>
+            <View style={styles.crownIconModalBadge}>
+              <Ionicons name="trophy" size={28} color="#000000" />
+            </View>
+            <Text style={styles.membershipModalTitle}>FLEX PACE PRO ORGANIZER</Text>
+            <Text style={styles.membershipModalDesc}>
+              Akses eksklusif untuk mempublikasikan event lari & gowes komunitas serta lencana mahkota emas di profil dan feed sosial.
+            </Text>
+
+            {/* Pilihan Paket Langganan */}
+            <View style={styles.plansContainer}>
+              <TouchableOpacity 
+                style={[styles.planCard, selectedPlan === 'monthly' && styles.planCardActive]}
+                onPress={() => setSelectedPlan('monthly')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.planRadio}>
+                  {selectedPlan === 'monthly' && <View style={styles.planRadioInner} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.planTitle}>Paket Bulanan</Text>
+                  <Text style={styles.planPrice}>Rp 49.000 <Text style={styles.planPeriod}>/ bulan</Text></Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.planCard, selectedPlan === 'yearly' && styles.planCardActive]}
+                onPress={() => setSelectedPlan('yearly')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.saveBadge}>
+                  <Text style={styles.saveBadgeText}>HEMAT 40%</Text>
+                </View>
+                <View style={styles.planRadio}>
+                  {selectedPlan === 'yearly' && <View style={styles.planRadioInner} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.planTitle}>Paket Tahunan (Paling Populer)</Text>
+                  <Text style={styles.planPrice}>Rp 399.000 <Text style={styles.planPeriod}>/ tahun</Text></Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Benefit Member */}
+            <View style={styles.perksList}>
+              <View style={styles.perkItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                <Text style={styles.perkText}>Publikasi Event Fun Run & Marathon Tak Terbatas</Text>
+              </View>
+              <View style={styles.perkItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                <Text style={styles.perkText}>Lencana Mahkota Emas 👑 & Profil VIP</Text>
+              </View>
+              <View style={styles.perkItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                <Text style={styles.perkText}>Proteksi Anti-Spam Komunitas & Prioritas Tayang</Text>
+              </View>
+            </View>
+
+            {/* Pilihan Metode Bayar */}
+            <View style={styles.methodToggle}>
+              <TouchableOpacity 
+                style={[styles.methodBtn, paymentMethod === 'qris' && styles.methodBtnActive]}
+                onPress={() => setPaymentMethod('qris')}
+              >
+                <Text style={[styles.methodText, paymentMethod === 'qris' && styles.methodTextActive]}>QRIS</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.methodBtn, paymentMethod === 'va' && styles.methodBtnActive]}
+                onPress={() => setPaymentMethod('va')}
+              >
+                <Text style={[styles.methodText, paymentMethod === 'va' && styles.methodTextActive]}>Virtual Account</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Action Buttons */}
+            <TouchableOpacity 
+              style={styles.payBtn}
+              onPress={handlePayMembership}
+              disabled={isProcessingPayment}
+              activeOpacity={0.85}
+            >
+              {isProcessingPayment ? (
+                <ActivityIndicator color="#000000" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="card" size={18} color="#000000" style={{ marginRight: 6 }} />
+                  <Text style={styles.payBtnText}>
+                    Bayar & Aktifkan {selectedPlan === 'yearly' ? 'Rp 399.000' : 'Rp 49.000'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.closeModalBtn}
+              onPress={() => setMembershipModalVisible(false)}
+            >
+              <Text style={styles.closeModalText}>Nanti Saja (Tutup)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -785,5 +984,314 @@ const styles = StyleSheet.create({
     color: '#27272A',
     fontSize: 11,
     marginTop: 2,
+  },
+
+  // VIP BADGE & AVATAR
+  avatarContainerVip: {
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    borderRadius: 43,
+    padding: 2,
+  },
+  avatarVip: {
+    borderColor: '#FFD700',
+  },
+  vipCrownBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  vipCrownText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+
+  // VIP MEMBERSHIP CARD (ACTIVE)
+  vipMembershipCard: {
+    backgroundColor: '#1C190D',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#FFD700',
+    padding: 16,
+    marginBottom: 20,
+  },
+  vipCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vipCrownIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  vipCardTitle: {
+    color: '#FFD700',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  vipCardStatus: {
+    color: '#D4D4D8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  vipActiveBadge: {
+    backgroundColor: '#2E2405',
+    borderColor: '#FFD700',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  vipActiveText: {
+    color: '#FFD700',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  vipDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    marginVertical: 12,
+  },
+  vipPerksRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  vipPerkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vipPerkText: {
+    color: '#E4E4E7',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  // UPGRADE CALL TO ACTION CARD
+  upgradeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16151E',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#3F3B20',
+    padding: 16,
+    marginBottom: 20,
+  },
+  upgradeIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  upgradeTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  upgradeDesc: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
+    paddingRight: 6,
+  },
+  upgradeBtn: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  upgradeBtnText: {
+    color: '#000000',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // MODAL STYLES
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  membershipModalCard: {
+    backgroundColor: '#141418',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderColor: '#FFD700',
+    padding: 24,
+    paddingBottom: 36,
+  },
+  crownIconModalBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  membershipModalTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  membershipModalDesc: {
+    color: '#A1A1AA',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 6,
+    marginBottom: 18,
+  },
+  plansContainer: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  planCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1E24',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  planCardActive: {
+    borderColor: '#FFD700',
+    backgroundColor: '#252110',
+  },
+  planRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  planRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFD700',
+  },
+  planTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  planPrice: {
+    color: '#FFD700',
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  planPeriod: {
+    fontSize: 11,
+    color: '#A1A1AA',
+    fontWeight: '500',
+  },
+  saveBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderBottomLeftRadius: 10,
+  },
+  saveBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  perksList: {
+    backgroundColor: '#18181D',
+    borderRadius: 14,
+    padding: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  perkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  perkText: {
+    color: '#D4D4D8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  methodToggle: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+  },
+  methodBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#1E1E24',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  methodBtnActive: {
+    borderColor: '#FFD700',
+    backgroundColor: '#2A240E',
+  },
+  methodText: {
+    color: '#71717A',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  methodTextActive: {
+    color: '#FFD700',
+  },
+  payBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#FFD700',
+    paddingVertical: 14,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  payBtnText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  closeModalBtn: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  closeModalText: {
+    color: '#71717A',
+    fontSize: 13,
+    fontWeight: '600',
   }
 });

@@ -41,6 +41,7 @@ export interface PostData {
     name?: string;
     avatar_url?: string;
     role?: string;
+    is_premium?: boolean;
   };
   likes?: { user_id: string }[];
   comments?: PostComment[];
@@ -328,12 +329,18 @@ export default function PostCard({ post, currentUserId, onPostUpdated }: PostCar
     <View style={styles.card}>
       {/* Header: Foto Profil, Nama, Waktu */}
       <View style={styles.header}>
-        <View style={styles.avatarRing}>
+        <View style={[styles.avatarRing, post.profiles?.is_premium && styles.avatarRingVip]}>
           <Image source={{ uri: userAvatar }} style={styles.avatar} />
         </View>
         <View style={styles.headerInfo}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.userName}>{userName}</Text>
+            <Text style={[styles.userName, post.profiles?.is_premium && styles.userNameVip]}>{userName}</Text>
+            {post.profiles?.is_premium && (
+              <View style={styles.vipBadgePill}>
+                <Ionicons name="trophy" size={9} color="#000000" style={{ marginRight: 2 }} />
+                <Text style={styles.vipBadgeText}>VIP</Text>
+              </View>
+            )}
             {post.sport_type && (
               <View style={styles.sportBadge}>
                 <Text style={styles.sportBadgeText}>{post.sport_type}</Text>
@@ -548,6 +555,14 @@ const styles = StyleSheet.create({
     borderColor: '#D7FF00',
     marginRight: 10,
   },
+  avatarRingVip: {
+    borderColor: '#FFD700',
+    borderWidth: 2.5,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+  },
   avatar: {
     width: 38,
     height: 38,
@@ -561,6 +576,25 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  userNameVip: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  vipBadgePill: {
+    backgroundColor: '#FFD700',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  vipBadgeText: {
+    color: '#000000',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   sportBadge: {
     backgroundColor: 'rgba(215, 255, 0, 0.15)',

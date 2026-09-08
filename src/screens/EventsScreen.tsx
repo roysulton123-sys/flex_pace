@@ -199,27 +199,16 @@ export default function EventsScreen() {
         </ScrollView>
       </View>
 
-      {/* Hero Banner: Ajak Semua Orang Buat Event */}
+      {/* Hero Banner: Info Event Komunitas */}
       <View style={styles.heroBanner}>
         <View style={styles.heroGlow} />
         <View style={styles.heroTextCol}>
           <Text style={styles.heroSub}>KOMUNITAS FLEX PACE</Text>
-          <Text style={styles.heroTitle}>Adakan Fun Run / Gowes Anda</Text>
+          <Text style={styles.heroTitle}>Event Lari, Gowes & Marathon</Text>
           <Text style={styles.heroDesc}>
-            Semua atlet dapat mempublikasikan event lari santai atau gowes bersama secara gratis!
+            Temukan dan ikuti berbagai event olahraga komunitas resmi terverifikasi di seluruh Indonesia.
           </Text>
         </View>
-        <TouchableOpacity 
-          style={styles.heroButton}
-          activeOpacity={0.85}
-          onPress={() => {
-            // @ts-ignore
-            navigation.navigate('CreateEvent');
-          }}
-        >
-          <Ionicons name="add" size={18} color="#000000" style={{ marginRight: 4 }} />
-          <Text style={styles.heroButtonText}>Buat Event</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Event List */}
@@ -228,18 +217,8 @@ export default function EventsScreen() {
           <Ionicons name="calendar-clear-outline" size={54} color="#333333" />
           <Text style={styles.emptyTitle}>Belum ada Event yang sesuai</Text>
           <Text style={styles.emptySub}>
-            {searchQuery ? 'Coba gunakan kata kunci pencarian lain.' : 'Jadilah yang pertama membuat Fun Run komunitas!'}
+            {searchQuery ? 'Coba gunakan kata kunci pencarian lain.' : 'Gunakan tombol Buat Event di pojok kanan bawah untuk menambahkan event baru.'}
           </Text>
-          <TouchableOpacity 
-            style={styles.emptyCreateBtn}
-            onPress={() => {
-              // @ts-ignore
-              navigation.navigate('CreateEvent');
-            }}
-          >
-            <Ionicons name="add-circle-outline" size={18} color="#000000" style={{ marginRight: 6 }} />
-            <Text style={styles.emptyCreateBtnText}>Buat Event Sekarang</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
