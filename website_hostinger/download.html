@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unduh Flex Pace APK - Aplikasi Pelacak Lari & Gowes</title>
+  <meta http-equiv="refresh" content="2; url=app-release.apk" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #0A0A0C;
+      color: #FFFFFF;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .card {
+      background: #141419;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 40px 30px;
+      max-width: 440px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .logo {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      background: #D7FF00;
+      color: #000;
+      font-weight: 900;
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      box-shadow: 0 0 25px rgba(215, 255, 0, 0.35);
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    p {
+      color: #A1A1AA;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .ref-box {
+      background: rgba(215, 255, 0, 0.1);
+      border: 1px dashed #D7FF00;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 24px;
+      display: none;
+    }
+    .ref-title {
+      font-size: 11px;
+      color: #D7FF00;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .ref-code {
+      font-size: 18px;
+      font-weight: 900;
+      color: #FFF;
+      margin-top: 4px;
+    }
+    .btn {
+      display: inline-block;
+      width: 100%;
+      box-sizing: border-box;
+      background: #D7FF00;
+      color: #000;
+      font-weight: 900;
+      padding: 16px;
+      border-radius: 16px;
+      text-decoration: none;
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    .subtext {
+      font-size: 12px;
+      color: #71717A;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">FP</div>
+    <h1>Mengunduh Flex Pace...</h1>
+    <p>Unduhan file APK akan dimulai otomatis dalam beberapa detik. Jika tidak dimulai, klik tombol di bawah.</p>
+
+    <div class="ref-box" id="ref-container">
+      <div class="ref-title">Kode Undangan Teman Anda</div>
+      <div class="ref-code" id="ref-val">FP-ATHLETE</div>
+    </div>
+
+    <a href="app-release.apk" download class="btn">Klik di Sini untuk Unduh Manual</a>
+    <div class="subtext">Aman • Bebas Virus • APK Resmi Flex Pace</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      document.getElementById('ref-container').style.display = 'block';
+      document.getElementById('ref-val').innerText = ref;
+    }
+  </script>
+</body>
+</html>

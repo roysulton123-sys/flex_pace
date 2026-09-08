@@ -12,7 +12,8 @@ import {
   KeyboardAvoidingView, 
   Platform,
   ActivityIndicator,
-  Alert
+  Alert,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -34,9 +35,12 @@ export interface PostData {
   image_url: string;
   caption: string;
   created_at: string;
+  telemetry?: string;
+  sport_type?: string;
   profiles?: {
     name?: string;
     avatar_url?: string;
+    role?: string;
   };
   likes?: { user_id: string }[];
   comments?: PostComment[];
@@ -52,6 +56,11 @@ export default function PostCard({ post, currentUserId, onPostUpdated }: PostCar
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
   const [isLiking, setIsLiking] = useState(false);
+
+  // Double tap like animation
+  const lastTapRef = React.useRef<number>(0);
+  const [showHeartAnim, setShowHeartAnim] = useState(false);
+  const heartScale = React.useRef(new Animated.Value(0)).current;
 
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [comments, setComments] = useState<PostComment[]>([]);
@@ -292,16 +301,45 @@ export default function PostCard({ post, currentUserId, onPostUpdated }: PostCar
     return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
   };
 
+  const handleImagePress = () => {
+    const now = Date.now();
+    if (lastTapRef.current && (now - lastTapRef.current) < 300) {
+      if (!liked) {
+        handleToggleLike();
+      }
+      setShowHeartAnim(true);
+      heartScale.setValue(0);
+      Animated.sequence([
+        Animated.spring(heartScale, { toValue: 1.2, friction: 3, useNativeDriver: true }),
+        Animated.timing(heartScale, { toValue: 1, duration: 150, useNativeDriver: true }),
+        Animated.delay(400),
+        Animated.timing(heartScale, { toValue: 0, duration: 200, useNativeDriver: true })
+      ]).start(() => setShowHeartAnim(false));
+      lastTapRef.current = 0;
+    } else {
+      lastTapRef.current = now;
+    }
+  };
+
   const userName = post.profiles?.name || 'Flex Athlete';
-  const userAvatar = post.profiles?.avatar_url || 'https://via.placeholder.com/150';
+  const userAvatar = post.profiles?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80';
 
   return (
     <View style={styles.card}>
       {/* Header: Foto Profil, Nama, Waktu */}
       <View style={styles.header}>
-        <Image source={{ uri: userAvatar }} style={styles.avatar} />
+        <View style={styles.avatarRing}>
+          <Image source={{ uri: userAvatar }} style={styles.avatar} />
+        </View>
         <View style={styles.headerInfo}>
-          <Text style={styles.userName}>{userName}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.userName}>{userName}</Text>
+            {post.sport_type && (
+              <View style={styles.sportBadge}>
+                <Text style={styles.sportBadgeText}>{post.sport_type}</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.timestamp}>{formatDate(post.created_at)}</Text>
         </View>
         <TouchableOpacity style={styles.moreButton} onPress={handleMoreOptions} activeOpacity={0.7}>
@@ -309,13 +347,34 @@ export default function PostCard({ post, currentUserId, onPostUpdated }: PostCar
         </TouchableOpacity>
       </View>
 
-      {/* Gambar Postingan */}
+      {/* Gambar Postingan dengan Double-Tap & Telemetry HUD Overlay */}
       {post.image_url ? (
-        <Image 
-          source={{ uri: post.image_url }} 
-          style={styles.postImage} 
-          resizeMode="cover"
-        />
+        <TouchableOpacity 
+          activeOpacity={1} 
+          onPress={handleImagePress} 
+          style={styles.imageWrapper}
+        >
+          <Image 
+            source={{ uri: post.image_url }} 
+            style={styles.postImage} 
+            resizeMode="cover"
+          />
+
+          {/* Telemetry Badge Khas Flex Pace */}
+          <View style={styles.telemetryBadge}>
+            <Ionicons name="flash" size={11} color="#D7FF00" style={{ marginRight: 4 }} />
+            <Text style={styles.telemetryBadgeText}>
+              {post.telemetry || "5.24 KM • PACE 04'52\""}
+            </Text>
+          </View>
+
+          {/* Double Tap Floating Animated Heart */}
+          {showHeartAnim && (
+            <Animated.View style={[styles.floatingHeart, { transform: [{ scale: heartScale }] }]}>
+              <Ionicons name="heart" size={90} color="#D7FF00" />
+            </Animated.View>
+          )}
+        </TouchableOpacity>
       ) : null}
 
       {/* Action Bar: Like, Komen, Share */}
@@ -482,14 +541,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1E1E24',
-    borderWidth: 1.5,
+  avatarRing: {
+    padding: 2,
+    borderRadius: 24,
+    borderWidth: 2,
     borderColor: '#D7FF00',
     marginRight: 10,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#1E1E24',
   },
   headerInfo: {
     flex: 1,
@@ -499,6 +562,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
   },
+  sportBadge: {
+    backgroundColor: 'rgba(215, 255, 0, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  sportBadgeText: {
+    color: '#D7FF00',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
   timestamp: {
     color: '#888888',
     fontSize: 11,
@@ -507,10 +583,45 @@ const styles = StyleSheet.create({
   moreButton: {
     padding: 5,
   },
+  imageWrapper: {
+    position: 'relative',
+    width: '100%',
+    backgroundColor: '#1c1c1e',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   postImage: {
     width: '100%',
-    height: 360,
+    height: 380,
     backgroundColor: '#1c1c1e',
+  },
+  telemetryBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 10, 12, 0.78)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 255, 0, 0.35)',
+  },
+  telemetryBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  floatingHeart: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#D7FF00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 16,
   },
   actionsBar: {
     flexDirection: 'row',

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flex Pace - Unduh Aplikasi Olahraga & Pelacak Pace Resmi</title>
+  <meta name="description" content="Ukur kecepatan pace, rute lari & gowes, ikuti event Fun Run komunitas, dan bagikan story athletic 9:16 dengan Flex Pace." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0A0A0C;
+      --card-bg: #141419;
+      --accent: #D7FF00;
+      --accent-glow: rgba(215, 255, 0, 0.25);
+      --text: #FFFFFF;
+      --text-muted: #A1A1AA;
+      --border: rgba(255, 255, 255, 0.08);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    /* NAVBAR */
+    nav {
+      padding: 24px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      background: var(--accent);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 20px;
+      color: #000;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .brand-name {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+    .brand-name span {
+      color: var(--accent);
+    }
+    .nav-btn {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      border: 1px solid var(--border);
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    /* REFERRAL BANNER */
+    #referral-banner {
+      display: none;
+      background: linear-gradient(90deg, rgba(215, 255, 0, 0.15) 0%, rgba(20, 20, 25, 0.9) 100%);
+      border: 1px solid var(--accent);
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin: 28px 0 0 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .ref-text {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .ref-code-pill {
+      background: var(--accent);
+      color: #000;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      display: inline-block;
+      margin-left: 6px;
+    }
+
+    /* HERO */
+    .hero {
+      padding: 60px 0 40px;
+      text-align: center;
+      position: relative;
+    }
+    .hero-glow {
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(215, 255, 0, 0.18) 0%, transparent 70%);
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(215, 255, 0, 0.1);
+      border: 1px solid rgba(215, 255, 0, 0.3);
+      color: var(--accent);
+      padding: 6px 16px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+    .hero p {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 640px;
+      margin: 0 auto 36px;
+    }
+    .cta-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: var(--accent);
+      color: #000;
+      padding: 18px 36px;
+      border-radius: 36px;
+      font-size: 17px;
+      font-weight: 900;
+      text-decoration: none;
+      box-shadow: 0 8px 30px var(--accent-glow);
+      transition: all 0.25s ease;
+    }
+    .btn-download:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(215, 255, 0, 0.4);
+    }
+    .apk-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* FEATURES GRID */
+    .features {
+      padding: 60px 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 30px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(215, 255, 0, 0.4);
+    }
+    .feature-icon {
+      font-size: 32px;
+      margin-bottom: 16px;
+    }
+    .feature-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    .feature-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* INSTALL GUIDE */
+    .guide-box {
+      background: #111116;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 40px;
+      margin: 40px 0 80px;
+    }
+    .guide-title {
+      font-size: 24px;
+      font-weight: 900;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .guide-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+    }
+    .step-item {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+    }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 16px;
+      background: var(--accent);
+      color: #000;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .step-text {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .step-text strong {
+      color: #fff;
+    }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 36px 0;
+      text-align: center;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- NAVBAR -->
+    <nav>
+      <a href="#" class="brand">
+        <div class="brand-logo">FP</div>
+        <div class="brand-name">FLEX <span>PACE</span></div>
+      </a>
+      <a href="#download" class="nav-btn">Unduh APK</a>
+    </nav>
+
+    <!-- REFERRAL NOTIFICATION -->
+    <div id="referral-banner">
+      <div class="ref-text">
+        🎉 Anda diundang bergabung oleh teman atlet dengan kode referral:
+        <span class="ref-code-pill" id="ref-code-display">FP-ATHLETE</span>
+      </div>
+      <button class="nav-btn" onclick="copyRefCode()" style="background: var(--accent); color: #000;">Salin Kode</button>
+    </div>
+
+    <!-- HERO -->
+    <section class="hero" id="download">
+      <div class="hero-glow"></div>
+      <div class="hero-badge">⚡ PLATFORM PACE & RUNNING INDONESIA</div>
+      <h1>Lari Lebih Cepat.<br>Pamerkan Pacemu.</h1>
+      <p>
+        Aplikasi atletik modern dengan pelacakan GPS akurat, fitur story pace 9:16 bergaya, tiket event Fun Run komunitas, dan feed sosial foto atlet.
+      </p>
+
+      <div class="cta-container">
+        <!-- Direct download link: place app-release.apk in the same folder -->
+        <a href="app-release.apk" download class="btn-download" id="apk-download-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Unduh Flex Pace APK (Android)
+        </a>
+        <div class="apk-meta">Versi 1.0.0 • Gratis • Kompatibel Android 8.0 ke atas</div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="features">
+      <div class="feature-card">
+        <div class="feature-icon">📸</div>
+        <div class="feature-title">Story Selfie 9:16</div>
+        <div class="feature-desc">5 model template telemetri HUD pace untuk dipamerkan langsung di Instagram Stories dan WhatsApp status.</div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🏃‍♂️</div>
+        <div class="feature-title">Event Fun Run & Gowes</div>
+        <div class="feature-desc">Buat dan ikuti event olahraga terbuka. Pembayaran instan via QRIS/VA dan tiket BIB digital otomatis.</div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🗺️</div>
+        <div class="feature-title">Riwayat Rute & Peta GPS</div>
+        <div class="feature-desc">Rekam rute lari dan jelajahi jejak atlet lain di peta interaktif lengkap dengan elevasi dan statistik detil.</div>
+      </div>
+    </section>
+
+    <!-- PANDUAN INSTALASI -->
+    <div class="guide-box">
+      <h2 class="guide-title">Cara Pasang Aplikasi di HP Android Anda</h2>
+      <div class="guide-steps">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-text">Klik tombol <strong>Unduh Flex Pace APK</strong> di atas dan tunggu unduhan selesai.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-text">Buka file <strong>.apk</strong> dari notifikasi atau folder Download ponsel Anda.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-text">Jika diminta izin, aktifkan <strong>"Izinkan pemasangan dari sumber ini"</strong>.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-text">Klik <strong>Instal</strong>, buka Flex Pace, dan mulai rekam kecepatan pace Anda!</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      <p>&copy; 2026 Flex Pace App. Dirancang untuk Komunitas Lari & Sepeda Indonesia.</p>
+    </footer>
+  </div>
+
+  <script>
+    // Ambil parameter ?ref= dari URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+
+    if (refCode) {
+      const banner = document.getElementById('referral-banner');
+      const codeDisplay = document.getElementById('ref-code-display');
+      if (banner && codeDisplay) {
+        banner.style.display = 'flex';
+        codeDisplay.innerText = refCode;
+      }
+    }
+
+    function copyRefCode() {
+      const code = document.getElementById('ref-code-display').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        alert('Kode referral disalin: ' + code + '\nMasukkan kode ini saat mendaftar akun di aplikasi!');
+      });
+    }
+  </script>
+</body>
+</html>
