@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Flex Pace",
+    "slug": "flex-pace",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0C",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.roysulton.flexpace"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Aplikasi ini membutuhkan akses ke galeri untuk mengunggah foto profil dan postingan Anda.",
+          "cameraPermission": "Aplikasi ini membutuhkan akses ke kamera untuk mengambil foto profil dan postingan Anda."
+        }
+      ],
+      "expo-sharing"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "81250342-1593-4817-b3c1-fde994aaa7ac"
+      }
+    }
+  }
+}
