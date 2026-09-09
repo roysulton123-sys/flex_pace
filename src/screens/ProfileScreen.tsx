@@ -49,6 +49,68 @@ export default function ProfileScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'qris' | 'va'>('qris');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+  // AI Pace Coach & VDOT Race Predictor Modal (Eksklusif VIP PRO)
+  const [aiLabModalVisible, setAiLabModalVisible] = useState(false);
+
+  const calculateAiInsights = () => {
+    let baselinePaceSec = 330; // Default 5:30 min/km jika belum ada cukup sesi
+    if (stats.totalDistanceKm > 0 && stats.totalTimeSeconds > 0) {
+      const recordedPace = stats.totalTimeSeconds / stats.totalDistanceKm;
+      baselinePaceSec = Math.max(180, Math.min(540, recordedPace));
+    }
+
+    // Peter Riegel formula: T2 = T1 * (D2 / D1)^1.06
+    const t5k = 5 * baselinePaceSec;
+    const t10k = t5k * Math.pow(10 / 5, 1.06);
+    const tHalf = t5k * Math.pow(21.0975 / 5, 1.06);
+    const tFull = t5k * Math.pow(42.195 / 5, 1.06);
+
+    const formatRaceTime = (totalSec: number) => {
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = Math.floor(totalSec % 60);
+      if (h > 0) return `${h}j ${m}m ${s < 10 ? '0' : ''}${s}s`;
+      return `${m}m ${s < 10 ? '0' : ''}${s}s`;
+    };
+
+    const formatPaceFromTime = (totalSec: number, distanceKm: number) => {
+      const paceSec = totalSec / distanceKm;
+      const m = Math.floor(paceSec / 60);
+      const s = Math.floor(paceSec % 60);
+      return `${m}'${s < 10 ? '0' : ''}${s}"`;
+    };
+
+    // VO2 Max formula berdasarkan Jack Daniels VDOT approximation
+    const velocityMPerMin = 1000 / (baselinePaceSec / 60);
+    const vo2Max = Math.round((-4.60 + 0.182258 * velocityMPerMin + 0.000104 * Math.pow(velocityMPerMin, 2)) * 10) / 10;
+
+    let vo2Category = 'Baik (Good)';
+    if (vo2Max >= 52) vo2Category = 'Elite / Superior 🏅';
+    else if (vo2Max >= 47) vo2Category = 'Sangat Bagus 🔥';
+    else if (vo2Max >= 42) vo2Category = 'Bagus (Good) ⚡';
+    else vo2Category = 'Berkembang 🌱';
+
+    const recoveryHours = Math.min(36, Math.max(12, Math.round((stats.longestRunKm || 5) * 2.2)));
+
+    return {
+      t5kStr: formatRaceTime(t5k),
+      p5kStr: formatPaceFromTime(t5k, 5),
+      t10kStr: formatRaceTime(t10k),
+      p10kStr: formatPaceFromTime(t10k, 10),
+      tHalfStr: formatRaceTime(tHalf),
+      pHalfStr: formatPaceFromTime(tHalf, 21.0975),
+      tFullStr: formatRaceTime(tFull),
+      pFullStr: formatPaceFromTime(tFull, 42.195),
+      vo2Max,
+      vo2Category,
+      recoveryHours,
+      zone2Pace: formatPaceFromTime(baselinePaceSec * 1.25, 1),
+      zone4Pace: formatPaceFromTime(baselinePaceSec * 0.94, 1),
+    };
+  };
+
+  const aiInsights = calculateAiInsights();
+
   const handlePayMembership = async () => {
     setIsProcessingPayment(true);
     try {
@@ -455,6 +517,83 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* AI ATHLETIC LAB & PRO INSIGHTS (Eksklusif VIP) */}
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeaderRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="sparkles" size={14} color="#FFD700" style={{ marginRight: 6 }} />
+            <Text style={[styles.sectionTitle, { color: '#FFD700' }]}>AI ATHLETIC LAB & PREDIKSI LOMBA</Text>
+          </View>
+          <View style={profile?.is_premium ? styles.vipLabUnlockedBadge : styles.vipLabLockedBadge}>
+            <Ionicons 
+              name={profile?.is_premium ? "checkmark-circle" : "lock-closed"} 
+              size={11} 
+              color={profile?.is_premium ? "#FFD700" : "#71717A"} 
+              style={{ marginRight: 3 }} 
+            />
+            <Text style={profile?.is_premium ? styles.vipLabUnlockedText : styles.vipLabLockedText}>
+              {profile?.is_premium ? "VIP UNLOCKED" : "PRO ONLY"}
+            </Text>
+          </View>
+        </View>
+
+        {profile?.is_premium ? (
+          /* VIP Unlocked Card */
+          <View style={styles.aiLabCard}>
+            <View style={styles.aiLabHeader}>
+              <View style={styles.aiLabIconBox}>
+                <Ionicons name="hardware-chip" size={24} color="#000000" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.aiLabTitle}>Jack Daniels' VDOT & VO2 Max Engine</Text>
+                <Text style={styles.aiLabSub}>Algoritma adaptif berbasis kecepatan & ketahanan Anda</Text>
+              </View>
+            </View>
+
+            <View style={styles.aiMetricsRow}>
+              <View style={styles.aiMetricBox}>
+                <Text style={styles.aiMetricLabel}>ESTIMASI VO2 MAX</Text>
+                <Text style={styles.aiMetricVal}>{aiInsights.vo2Max}</Text>
+                <Text style={styles.aiMetricSub}>{aiInsights.vo2Category}</Text>
+              </View>
+              <View style={styles.aiMetricBox}>
+                <Text style={styles.aiMetricLabel}>PREDIKSI 5K RUN</Text>
+                <Text style={styles.aiMetricVal}>{aiInsights.t5kStr}</Text>
+                <Text style={styles.aiMetricSub}>Target Pace {aiInsights.p5kStr}/km</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.aiLabOpenBtn}
+              onPress={() => setAiLabModalVisible(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="analytics" size={16} color="#000000" style={{ marginRight: 6 }} />
+              <Text style={styles.aiLabOpenBtnText}>Buka Laporan Lengkap AI Pace Coach</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* Locked Card for Regular Member */
+          <TouchableOpacity 
+            style={styles.aiLabLockedCard}
+            onPress={() => setMembershipModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.lockedIconOverlay}>
+              <Ionicons name="lock-closed" size={26} color="#FFD700" />
+            </View>
+            <Text style={styles.lockedTitle}>Buka Analisis Prediksi Waktu Lomba & AI Coach</Text>
+            <Text style={styles.lockedDesc}>
+              Dapatkan estimasi akurat waktu 5K, 10K, Half & Full Marathon, kalkulasi VO2 Max, serta rekomendasi pemulihan otot eksklusif bagi member VIP PRO.
+            </Text>
+            <View style={styles.unlockCtaBtn}>
+              <Ionicons name="trophy" size={14} color="#000000" style={{ marginRight: 5 }} />
+              <Text style={styles.unlockCtaText}>Buka Fitur Canggih VIP (Upgrade)</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* PENGATURAN PRIVASI & KEAMANAN AKUN */}
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeaderRow}>
@@ -640,6 +779,121 @@ export default function ProfileScreen() {
             >
               <Text style={styles.closeModalText}>Nanti Saja (Tutup)</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL AI ATHLETIC LAB & RACE PREDICTOR (Eksklusif VIP) */}
+      <Modal
+        visible={aiLabModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setAiLabModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.membershipModalCard, { maxHeight: '88%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.aiModalHeader}>
+                <View style={styles.aiBadgeCrown}>
+                  <Ionicons name="sparkles" size={18} color="#000000" />
+                </View>
+                <Text style={styles.aiModalTitle}>AI ATHLETIC LAB & VDOT</Text>
+                <Text style={styles.aiModalSub}>
+                  Prediksi waktu lomba & efisiensi metabolisme atlet berbasis formula Jack Daniels & Peter Riegel.
+                </Text>
+              </View>
+
+              {/* CARD VO2 MAX & EFISIENSI */}
+              <View style={styles.aiVo2Card}>
+                <View style={styles.aiVo2Left}>
+                  <Text style={styles.aiVo2Label}>ESTIMASI VO2 MAX</Text>
+                  <Text style={styles.aiVo2Score}>{aiInsights.vo2Max}</Text>
+                  <Text style={styles.aiVo2Unit}>mL / kg / min</Text>
+                </View>
+                <View style={styles.aiVo2Right}>
+                  <View style={styles.aiVo2Badge}>
+                    <Text style={styles.aiVo2BadgeText}>{aiInsights.vo2Category}</Text>
+                  </View>
+                  <Text style={styles.aiVo2Desc}>
+                    Kapasitas aerobik dan ambang laktat Anda berada pada kategori unggul untuk lari jarak menengah.
+                  </Text>
+                </View>
+              </View>
+
+              {/* SECTION PREDIKSI WAKTU LOMBA */}
+              <Text style={styles.aiSectionTitle}>PREDIKSI WAKTU LOMBA KOMPETITIF</Text>
+              
+              <View style={styles.racePredictionsGrid}>
+                {/* 5K */}
+                <View style={styles.raceCard}>
+                  <View style={styles.raceCardHeader}>
+                    <Text style={styles.raceDist}>5K FUN RUN</Text>
+                    <Ionicons name="flash" size={14} color="#D7FF00" />
+                  </View>
+                  <Text style={styles.raceTime}>{aiInsights.t5kStr}</Text>
+                  <Text style={styles.racePace}>Pace target {aiInsights.p5kStr}/km</Text>
+                </View>
+
+                {/* 10K */}
+                <View style={styles.raceCard}>
+                  <View style={styles.raceCardHeader}>
+                    <Text style={styles.raceDist}>10K CITY RACE</Text>
+                    <Ionicons name="speedometer" size={14} color="#FF9F0A" />
+                  </View>
+                  <Text style={styles.raceTime}>{aiInsights.t10kStr}</Text>
+                  <Text style={styles.racePace}>Pace target {aiInsights.p10kStr}/km</Text>
+                </View>
+
+                {/* Half Marathon */}
+                <View style={styles.raceCard}>
+                  <View style={styles.raceCardHeader}>
+                    <Text style={styles.raceDist}>21K HALF MARATHON</Text>
+                    <Ionicons name="trophy" size={14} color="#FFD700" />
+                  </View>
+                  <Text style={styles.raceTime}>{aiInsights.tHalfStr}</Text>
+                  <Text style={styles.racePace}>Pace target {aiInsights.pHalfStr}/km</Text>
+                </View>
+
+                {/* Full Marathon */}
+                <View style={styles.raceCard}>
+                  <View style={styles.raceCardHeader}>
+                    <Text style={styles.raceDist}>42.2K FULL MARATHON</Text>
+                    <Ionicons name="ribbon" size={14} color="#FF3B30" />
+                  </View>
+                  <Text style={styles.raceTime}>{aiInsights.tFullStr}</Text>
+                  <Text style={styles.racePace}>Pace target {aiInsights.pFullStr}/km</Text>
+                </View>
+              </View>
+
+              {/* CARD RECOVERY ADVISOR */}
+              <View style={styles.recoveryCard}>
+                <View style={styles.recoveryHeaderRow}>
+                  <Ionicons name="fitness" size={18} color="#30D158" style={{ marginRight: 6 }} />
+                  <Text style={styles.recoveryTitle}>SMART RECOVERY ADVISOR</Text>
+                </View>
+                <View style={styles.recoveryInfoRow}>
+                  <View style={styles.recoveryMetric}>
+                    <Text style={styles.recoveryMetricVal}>{aiInsights.recoveryHours} Jam</Text>
+                    <Text style={styles.recoveryMetricLbl}>Waktu Istirahat Optimal</Text>
+                  </View>
+                  <View style={styles.recoveryDivider} />
+                  <View style={styles.recoveryMetric}>
+                    <Text style={styles.recoveryMetricVal}>{aiInsights.zone2Pace}/km</Text>
+                    <Text style={styles.recoveryMetricLbl}>Pace Zona 2 (Easy)</Text>
+                  </View>
+                </View>
+                <Text style={styles.recoveryAdviceText}>
+                  💡 Saran AI: Tubuh Anda menyerap latihan aerobik dengan sangat baik. Jadwalkan lari ringan (Zone 2) untuk menjaga kebugaran mitokondria otot.
+                </Text>
+              </View>
+
+              <TouchableOpacity 
+                style={[styles.payBtn, { backgroundColor: '#FFD700', marginTop: 10 }]}
+                onPress={() => setAiLabModalVisible(false)}
+              >
+                <Text style={styles.payBtnText}>Tutup Laporan AI</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1293,5 +1547,331 @@ const styles = StyleSheet.create({
     color: '#71717A',
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // AI ATHLETIC LAB STYLES
+  vipLabUnlockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2E2405',
+    borderColor: '#FFD700',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  vipLabUnlockedText: {
+    color: '#FFD700',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  vipLabLockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  vipLabLockedText: {
+    color: '#71717A',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  aiLabCard: {
+    backgroundColor: '#121217',
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 215, 0, 0.35)',
+    padding: 16,
+  },
+  aiLabHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  aiLabIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  aiLabTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  aiLabSub: {
+    color: '#71717A',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  aiMetricsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  aiMetricBox: {
+    flex: 1,
+    backgroundColor: '#1A1A22',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  aiMetricLabel: {
+    color: '#71717A',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  aiMetricVal: {
+    color: '#FFD700',
+    fontSize: 20,
+    fontWeight: '900',
+    marginVertical: 3,
+  },
+  aiMetricSub: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  aiLabOpenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFD700',
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  aiLabOpenBtnText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  aiLabLockedCard: {
+    backgroundColor: '#131317',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 18,
+    alignItems: 'center',
+  },
+  lockedIconOverlay: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 215, 0, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  lockedTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  lockedDesc: {
+    color: '#71717A',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  unlockCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  unlockCtaText: {
+    color: '#000000',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // MODAL AI LAB
+  aiModalHeader: {
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  aiBadgeCrown: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  aiModalTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  aiModalSub: {
+    color: '#71717A',
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: 4,
+    paddingHorizontal: 8,
+  },
+  aiVo2Card: {
+    flexDirection: 'row',
+    backgroundColor: '#191922',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FFD700',
+    padding: 14,
+    marginBottom: 18,
+  },
+  aiVo2Left: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: 14,
+    borderRightWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  aiVo2Label: {
+    color: '#71717A',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  aiVo2Score: {
+    color: '#FFD700',
+    fontSize: 28,
+    fontWeight: '900',
+    marginVertical: 2,
+  },
+  aiVo2Unit: {
+    color: '#A1A1AA',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  aiVo2Right: {
+    flex: 1,
+    paddingLeft: 12,
+    justifyContent: 'center',
+  },
+  aiVo2Badge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#2E2405',
+    borderColor: '#FFD700',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  aiVo2BadgeText: {
+    color: '#FFD700',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  aiVo2Desc: {
+    color: '#D4D4D8',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  aiSectionTitle: {
+    color: '#71717A',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  racePredictionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  raceCard: {
+    width: '48%',
+    backgroundColor: '#181820',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  raceCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  raceDist: {
+    color: '#A1A1AA',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  raceTime: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
+  racePace: {
+    color: '#D7FF00',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  recoveryCard: {
+    backgroundColor: '#181820',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(48, 209, 88, 0.3)',
+  },
+  recoveryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  recoveryTitle: {
+    color: '#30D158',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  recoveryInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  recoveryMetric: {
+    flex: 1,
+  },
+  recoveryMetricVal: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  recoveryMetricLbl: {
+    color: '#71717A',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  recoveryDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginHorizontal: 12,
+  },
+  recoveryAdviceText: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    lineHeight: 16,
   }
 });

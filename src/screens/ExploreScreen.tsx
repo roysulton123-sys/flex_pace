@@ -7,7 +7,10 @@ import {
   TouchableOpacity, 
   Dimensions, 
   ActivityIndicator, 
-  RefreshControl 
+  RefreshControl,
+  Share,
+  Alert,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -32,10 +35,77 @@ export default function ExploreScreen() {
   const [loadingRoutes, setLoadingRoutes] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // VIP Membership & GPX Export State
+  const [isVipMember, setIsVipMember] = useState(false);
+  const [vipModalVisible, setVipModalVisible] = useState(false);
+
   useEffect(() => {
     fetchCurrentLocation();
     fetchUserRoutes();
+    checkMembership();
   }, []);
+
+  const checkMembership = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_premium')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.is_premium) {
+        setIsVipMember(true);
+      }
+    } catch (e) {
+      console.log('Error checking membership:', e);
+    }
+  };
+
+  // Generator File GPX 1.1 Standar Internasional (Garmin, Coros, Suunto)
+  const generateGpxString = (route: RecordedRoute) => {
+    const coords = route.route_coordinates || [];
+    const dateStr = route.created_at || new Date().toISOString();
+    const trkpts = coords.map((pt) => {
+      return `      <trkpt lat="${pt.latitude}" lon="${pt.longitude}">
+        <ele>15.0</ele>
+        <time>${dateStr}</time>
+      </trkpt>`;
+    }).join('\n');
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Flex Pace PRO Athlete Hub" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <metadata>
+    <name>Flex Pace - ${route.sport_type} ${(route.distance_meters / 1000).toFixed(2)} KM</name>
+    <desc>Rute olahraga resmi Flex Pace PRO. Kompatibel dengan Garmin, Coros, Suunto, Wahoo, &amp; Strava.</desc>
+    <time>${dateStr}</time>
+  </metadata>
+  <trk>
+    <name>${route.sport_type} ${(route.distance_meters / 1000).toFixed(2)} KM</name>
+    <type>${route.sport_type.toUpperCase()}</type>
+    <trkseg>
+${trkpts}
+    </trkseg>
+  </trk>
+</gpx>`;
+  };
+
+  const handleExportGpx = async (route: RecordedRoute) => {
+    if (!isVipMember) {
+      setVipModalVisible(true);
+      return;
+    }
+
+    try {
+      const gpxContent = generateGpxString(route);
+      await Share.share({
+        title: `Flex Pace Route - ${route.sport_type} ${(route.distance_meters / 1000).toFixed(2)}KM.gpx`,
+        message: gpxContent,
+      });
+    } catch (e: any) {
+      Alert.alert('Gagal Ekspor GPX', e.message || 'Terjadi kesalahan saat memproses file GPX.');
+    }
+  };
 
   const fetchCurrentLocation = async () => {
     try {
@@ -261,10 +331,10 @@ export default function ExploreScreen() {
                       name={isSelected ? "eye" : "eye-outline"} 
                       size={14} 
                       color={isSelected ? "#000000" : "#D7FF00"} 
-                      style={{ marginRight: 5 }} 
+                      style={{ marginRight: 4 }} 
                     />
                     <Text style={[styles.actionBtnText, isSelected && styles.actionBtnTextActive]}>
-                      {isSelected ? 'Ditampilkan di Peta' : 'Tampilkan di Peta'}
+                      {isSelected ? 'Peta Aktif' : 'Lihat'}
                     </Text>
                   </TouchableOpacity>
 
@@ -280,8 +350,25 @@ export default function ExploreScreen() {
                       });
                     }}
                   >
-                    <Ionicons name="camera-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    <Text style={styles.storyActionBtnText}>Story 9:16</Text>
+                    <Ionicons name="camera-outline" size={14} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    <Text style={styles.storyActionBtnText}>Story</Text>
+                  </TouchableOpacity>
+
+                  {/* EKSPOR GPX (Eksklusif VIP) */}
+                  <TouchableOpacity 
+                    style={[styles.gpxActionBtn, isVipMember ? styles.gpxBtnVip : styles.gpxBtnLocked]}
+                    onPress={() => handleExportGpx(item)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons 
+                      name={isVipMember ? "download-outline" : "lock-closed"} 
+                      size={13} 
+                      color={isVipMember ? "#000000" : "#71717A"} 
+                      style={{ marginRight: 3 }} 
+                    />
+                    <Text style={[styles.gpxActionBtnText, isVipMember ? styles.gpxTextVip : styles.gpxTextLocked]}>
+                      {isVipMember ? 'Ekspor GPX' : 'GPX 🔒'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
@@ -289,6 +376,60 @@ export default function ExploreScreen() {
           })
         )}
       </View>
+
+      {/* MODAL VIP PRO EKSPOR GPX */}
+      <Modal
+        visible={vipModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setVipModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.vipModalCard}>
+            <View style={styles.vipModalIconBox}>
+              <Ionicons name="watch-outline" size={28} color="#000000" />
+            </View>
+            <Text style={styles.vipModalTitle}>EKSPOR RUTE GPX KE SMARTWATCH</Text>
+            <Text style={styles.vipModalDesc}>
+              Fitur canggih eksklusif Membership VIP PRO. Ekspor file rute GPX berstandar internasional untuk diimpor ke Garmin Connect, Coros Pace, Suunto, Wahoo, atau Google Earth.
+            </Text>
+
+            <View style={styles.gpxPerksBox}>
+              <View style={styles.gpxPerkItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                <Text style={styles.gpxPerkText}>File XML GPX 1.1 lengkap dengan koordinat rute GPS</Text>
+              </View>
+              <View style={styles.gpxPerkItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                <Text style={styles.gpxPerkText}>Kompatibel 100% dengan jam tangan lari Garmin &amp; Coros</Text>
+              </View>
+              <View style={styles.gpxPerkItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                <Text style={styles.gpxPerkText}>Bebas ekspor semua riwayat rute tanpa batas kuota</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.vipUpgradeBtn}
+              onPress={() => {
+                setVipModalVisible(false);
+                // @ts-ignore
+                navigation.navigate('Profile');
+              }}
+            >
+              <Ionicons name="trophy" size={16} color="#000000" style={{ marginRight: 6 }} />
+              <Text style={styles.vipUpgradeBtnText}>Upgrade ke VIP PRO (Mulai Rp 49rb)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={{ alignItems: 'center', marginTop: 12 }}
+              onPress={() => setVipModalVisible(false)}
+            >
+              <Text style={{ color: '#71717A', fontSize: 13, fontWeight: '600' }}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -559,6 +700,105 @@ const styles = StyleSheet.create({
   startRecordBtnText: {
     color: '#000000',
     fontSize: 13,
+    fontWeight: '900',
+  },
+
+  // GPX BUTTON & VIP MODAL
+  gpxActionBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginLeft: 8,
+    borderWidth: 1,
+  },
+  gpxBtnVip: {
+    backgroundColor: '#FFD700',
+    borderColor: '#FFD700',
+  },
+  gpxBtnLocked: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  gpxActionBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  gpxTextVip: {
+    color: '#000000',
+  },
+  gpxTextLocked: {
+    color: '#71717A',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    justifyContent: 'flex-end',
+  },
+  vipModalCard: {
+    backgroundColor: '#14141A',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderColor: '#FFD700',
+    padding: 24,
+    paddingBottom: 36,
+  },
+  vipModalIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  vipModalTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  vipModalDesc: {
+    color: '#A1A1AA',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 16,
+    paddingHorizontal: 6,
+  },
+  gpxPerksBox: {
+    backgroundColor: '#1C1C24',
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    marginBottom: 18,
+  },
+  gpxPerkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  gpxPerkText: {
+    color: '#E4E4E7',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  vipUpgradeBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#FFD700',
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vipUpgradeBtnText: {
+    color: '#000000',
+    fontSize: 14,
     fontWeight: '900',
   }
 });

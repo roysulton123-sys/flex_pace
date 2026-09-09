@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -8,19 +8,21 @@ import {
   Dimensions, 
   ScrollView, 
   ActivityIndicator, 
-  Alert 
+  Alert,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { supabase } from '../lib/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PREVIEW_WIDTH = Math.min(SCREEN_WIDTH - 48, 340);
 const PREVIEW_HEIGHT = (PREVIEW_WIDTH * 16) / 9;
 
-type LayoutTemplate = 'bottom_hud' | 'top_bar' | 'corner_stamp' | 'split_edge' | 'side_strip';
+type LayoutTemplate = 'bottom_hud' | 'top_bar' | 'corner_stamp' | 'split_edge' | 'side_strip' | 'vip_gold_crown' | 'vip_carbon_splits';
 
 export default function ShareStoryScreen() {
   const navigation = useNavigation();
@@ -73,6 +75,38 @@ export default function ShareStoryScreen() {
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [activeTemplate, setActiveTemplate] = useState<LayoutTemplate>('bottom_hud');
   const [isExporting, setIsExporting] = useState(false);
+
+  // VIP Membership State
+  const [isVipMember, setIsVipMember] = useState(false);
+  const [vipModalVisible, setVipModalVisible] = useState(false);
+
+  useEffect(() => {
+    const checkMembership = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_premium')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (profile?.is_premium) {
+          setIsVipMember(true);
+        }
+      } catch (e) {
+        console.log('Error checking membership:', e);
+      }
+    };
+    checkMembership();
+  }, []);
+
+  const selectTemplate = (template: LayoutTemplate) => {
+    if ((template === 'vip_gold_crown' || template === 'vip_carbon_splits') && !isVipMember) {
+      setVipModalVisible(true);
+      return;
+    }
+    setActiveTemplate(template);
+  };
 
   // Ambil foto kamera depan (Selfie)
   const takeSelfie = async (useFront = true) => {
@@ -302,6 +336,101 @@ export default function ShareStoryScreen() {
             <View style={{ flex: 1 }} />
           </View>
         );
+
+      case 'vip_gold_crown':
+        return (
+          // TEMPLATE 6 (VIP EKSKLUSIF): Golden Crown Hologram Pro
+          <View style={styles.templateContainer}>
+            {/* Crown Header with Golden Accent */}
+            <View style={styles.vipGoldTopBadge}>
+              <Ionicons name="trophy" size={13} color="#000000" style={{ marginRight: 5 }} />
+              <Text style={styles.vipGoldTopText}>FLEX PACE PRO ATHLETE</Text>
+              <Text style={styles.vipGoldTopDot}>•</Text>
+              <Text style={styles.vipGoldTopSub}>VERIFIED</Text>
+            </View>
+
+            <View style={{ flex: 1 }} />
+
+            {/* Premium Gold Glassmorphism Card */}
+            <View style={styles.vipGoldCard}>
+              <View style={styles.vipGoldCardHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                  <Text style={styles.vipGoldDistNum}>{distanceKm}</Text>
+                  <Text style={styles.vipGoldDistUnit}>KM</Text>
+                </View>
+                <View style={styles.vipGoldStamp}>
+                  <Ionicons name="star" size={11} color="#FFD700" style={{ marginRight: 3 }} />
+                  <Text style={styles.vipGoldStampText}>GOLD CLASS</Text>
+                </View>
+              </View>
+
+              <View style={styles.vipGoldDivider} />
+
+              <View style={styles.vipGoldMetricsRow}>
+                <View style={styles.vipGoldMetricCol}>
+                  <Text style={styles.vipGoldLabel}>PACE</Text>
+                  <Text style={styles.vipGoldVal}>{paceStr}</Text>
+                </View>
+                <View style={styles.vipGoldMetricCol}>
+                  <Text style={styles.vipGoldLabel}>DURASI</Text>
+                  <Text style={styles.vipGoldVal}>{formatDuration(durationSeconds)}</Text>
+                </View>
+                <View style={styles.vipGoldMetricCol}>
+                  <Text style={styles.vipGoldLabel}>KALORI</Text>
+                  <Text style={styles.vipGoldVal}>{estCalories} kkal</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        );
+
+      case 'vip_carbon_splits':
+        return (
+          // TEMPLATE 7 (VIP EKSKLUSIF): Carbon Split Matrix Telemetri
+          <View style={styles.templateContainer}>
+            <View style={styles.carbonMatrixHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="flash" size={13} color="#FFD700" style={{ marginRight: 4 }} />
+                <Text style={styles.carbonMatrixTitle}>SPEED TELEMETRY PRO</Text>
+              </View>
+              <Text style={styles.carbonTimestamp}>{timestampStr}</Text>
+            </View>
+
+            <View style={{ flex: 1 }} />
+
+            {/* Split Matrix Box */}
+            <View style={styles.carbonMatrixBox}>
+              <View style={styles.carbonHeroRow}>
+                <Text style={styles.carbonHeroNum}>{distanceKm}</Text>
+                <Text style={styles.carbonHeroUnit}>KM</Text>
+                <View style={{ flex: 1 }} />
+                <View style={styles.carbonPaceBadge}>
+                  <Text style={styles.carbonPaceLabel}>AVG PACE</Text>
+                  <Text style={styles.carbonPaceVal}>{paceStr}</Text>
+                </View>
+              </View>
+
+              <View style={styles.carbonGrid}>
+                <View style={styles.carbonGridCell}>
+                  <Text style={styles.carbonGridLbl}>WAKTU</Text>
+                  <Text style={styles.carbonGridVal}>{formatDuration(durationSeconds)}</Text>
+                </View>
+                <View style={styles.carbonGridCell}>
+                  <Text style={styles.carbonGridLbl}>DETAK JANTUNG</Text>
+                  <Text style={styles.carbonGridVal}>156 BPM</Text>
+                </View>
+                <View style={styles.carbonGridCell}>
+                  <Text style={styles.carbonGridLbl}>CADENCE</Text>
+                  <Text style={styles.carbonGridVal}>174 SPM</Text>
+                </View>
+                <View style={styles.carbonGridCell}>
+                  <Text style={styles.carbonGridLbl}>EFFICIENCY</Text>
+                  <Text style={[styles.carbonGridVal, { color: '#30D158' }]}>94%</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        );
     }
   };
 
@@ -344,7 +473,7 @@ export default function ShareStoryScreen() {
             
             <TouchableOpacity 
               style={[styles.templateChip, activeTemplate === 'bottom_hud' && styles.templateChipActive]}
-              onPress={() => setActiveTemplate('bottom_hud')}
+              onPress={() => selectTemplate('bottom_hud')}
               activeOpacity={0.8}
             >
               <Ionicons name="tablet-landscape-outline" size={14} color={activeTemplate === 'bottom_hud' ? '#000000' : '#D7FF00'} style={{ marginRight: 5 }} />
@@ -355,7 +484,7 @@ export default function ShareStoryScreen() {
 
             <TouchableOpacity 
               style={[styles.templateChip, activeTemplate === 'top_bar' && styles.templateChipActive]}
-              onPress={() => setActiveTemplate('top_bar')}
+              onPress={() => selectTemplate('top_bar')}
               activeOpacity={0.8}
             >
               <Ionicons name="reorder-two-outline" size={14} color={activeTemplate === 'top_bar' ? '#000000' : '#D7FF00'} style={{ marginRight: 5 }} />
@@ -366,7 +495,7 @@ export default function ShareStoryScreen() {
 
             <TouchableOpacity 
               style={[styles.templateChip, activeTemplate === 'corner_stamp' && styles.templateChipActive]}
-              onPress={() => setActiveTemplate('corner_stamp')}
+              onPress={() => selectTemplate('corner_stamp')}
               activeOpacity={0.8}
             >
               <Ionicons name="pricetag-outline" size={14} color={activeTemplate === 'corner_stamp' ? '#000000' : '#D7FF00'} style={{ marginRight: 5 }} />
@@ -377,7 +506,7 @@ export default function ShareStoryScreen() {
 
             <TouchableOpacity 
               style={[styles.templateChip, activeTemplate === 'split_edge' && styles.templateChipActive]}
-              onPress={() => setActiveTemplate('split_edge')}
+              onPress={() => selectTemplate('split_edge')}
               activeOpacity={0.8}
             >
               <Ionicons name="barcode-outline" size={14} color={activeTemplate === 'split_edge' ? '#000000' : '#D7FF00'} style={{ marginRight: 5 }} />
@@ -388,12 +517,35 @@ export default function ShareStoryScreen() {
 
             <TouchableOpacity 
               style={[styles.templateChip, activeTemplate === 'side_strip' && styles.templateChipActive]}
-              onPress={() => setActiveTemplate('side_strip')}
+              onPress={() => selectTemplate('side_strip')}
               activeOpacity={0.8}
             >
               <Ionicons name="file-tray-stacked-outline" size={14} color={activeTemplate === 'side_strip' ? '#000000' : '#D7FF00'} style={{ marginRight: 5 }} />
               <Text style={[styles.templateChipText, activeTemplate === 'side_strip' && styles.templateChipTextActive]}>
                 Strip Samping
+              </Text>
+            </TouchableOpacity>
+
+            {/* TEMPLATE EKSKLUSIF VIP */}
+            <TouchableOpacity 
+              style={[styles.templateChip, styles.vipChip, activeTemplate === 'vip_gold_crown' && styles.vipChipActive]}
+              onPress={() => selectTemplate('vip_gold_crown')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trophy" size={14} color={activeTemplate === 'vip_gold_crown' ? '#000000' : '#FFD700'} style={{ marginRight: 5 }} />
+              <Text style={[styles.templateChipText, styles.vipChipText, activeTemplate === 'vip_gold_crown' && styles.vipChipTextActive]}>
+                👑 Mahkota Emas (VIP)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.templateChip, styles.vipChip, activeTemplate === 'vip_carbon_splits' && styles.vipChipActive]}
+              onPress={() => selectTemplate('vip_carbon_splits')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="speedometer" size={14} color={activeTemplate === 'vip_carbon_splits' ? '#000000' : '#FFD700'} style={{ marginRight: 5 }} />
+              <Text style={[styles.templateChipText, styles.vipChipText, activeTemplate === 'vip_carbon_splits' && styles.vipChipTextActive]}>
+                👑 Carbon Matrix (VIP)
               </Text>
             </TouchableOpacity>
 
@@ -434,6 +586,59 @@ export default function ShareStoryScreen() {
             </View>
           )}
         </TouchableOpacity>
+
+        {/* MODAL VIP PRO UNTUK TEMPLATE */}
+        <Modal
+          visible={vipModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setVipModalVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.vipModalCard}>
+              <View style={styles.vipCrownBadgeModal}>
+                <Ionicons name="trophy" size={28} color="#000000" />
+              </View>
+              <Text style={styles.vipModalTitle}>TEMPLATE EKSKLUSIF VIP PRO</Text>
+              <Text style={styles.vipModalDesc}>
+                Buka template eksklusif Mahkota Emas &amp; Carbon Split Matrix untuk memamerkan pencapaian olahraga Anda di media sosial dengan visual premium kelas dunia.
+              </Text>
+
+              <View style={styles.vipPerksBox}>
+                <View style={styles.vipPerkItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                  <Text style={styles.vipPerkText}>Desain emas mewah dengan lencana resmi verified athlete</Text>
+                </View>
+                <View style={styles.vipPerkItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                  <Text style={styles.vipPerkText}>Telemetri split cadence, detak jantung &amp; efisiensi</Text>
+                </View>
+                <View style={styles.vipPerkItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                  <Text style={styles.vipPerkText}>Bebas tanpa watermark default</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.vipUpgradeBtn}
+                onPress={() => {
+                  setVipModalVisible(false);
+                  // @ts-ignore
+                  navigation.navigate('Profile');
+                }}
+              >
+                <Text style={styles.vipUpgradeBtnText}>Upgrade ke VIP PRO (Mulai Rp 49rb)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={{ alignItems: 'center', marginTop: 12 }}
+                onPress={() => setVipModalVisible(false)}
+              >
+                <Text style={{ color: '#71717A', fontSize: 13, fontWeight: '600' }}>Nanti Saja</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
       </ScrollView>
     </View>
@@ -894,4 +1099,280 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.3,
   },
+
+  // VIP CHIP STYLES
+  vipChip: {
+    borderColor: '#FFD700',
+    backgroundColor: '#1E1B0E',
+  },
+  vipChipActive: {
+    backgroundColor: '#FFD700',
+  },
+  vipChipText: {
+    color: '#FFD700',
+  },
+  vipChipTextActive: {
+    color: '#000000',
+  },
+
+  // TEMPLATE 6: VIP GOLD CROWN STYLES
+  vipGoldTopBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 10,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+  },
+  vipGoldTopText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  vipGoldTopDot: {
+    color: '#000000',
+    marginHorizontal: 4,
+    fontWeight: '900',
+  },
+  vipGoldTopSub: {
+    color: '#000000',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  vipGoldCard: {
+    backgroundColor: 'rgba(15, 14, 8, 0.88)',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#FFD700',
+    padding: 12,
+    marginHorizontal: 12,
+    marginBottom: 14,
+  },
+  vipGoldCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  vipGoldDistNum: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  vipGoldDistUnit: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: '800',
+    marginLeft: 4,
+  },
+  vipGoldStamp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2E250A',
+    borderColor: '#FFD700',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  vipGoldStampText: {
+    color: '#FFD700',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  vipGoldDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 215, 0, 0.25)',
+    marginVertical: 8,
+  },
+  vipGoldMetricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  vipGoldMetricCol: {
+    alignItems: 'center',
+  },
+  vipGoldLabel: {
+    color: '#9CA3AF',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  vipGoldVal: {
+    color: '#FFD700',
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+
+  // TEMPLATE 7: CARBON MATRIX STYLES
+  carbonMatrixHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(12, 12, 16, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginHorizontal: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  carbonMatrixTitle: {
+    color: '#FFD700',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  carbonTimestamp: {
+    color: '#A1A1AA',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  carbonMatrixBox: {
+    backgroundColor: 'rgba(10, 10, 14, 0.92)',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#3F3B20',
+    padding: 12,
+    marginHorizontal: 10,
+    marginBottom: 12,
+  },
+  carbonHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  carbonHeroNum: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  carbonHeroUnit: {
+    color: '#D7FF00',
+    fontSize: 12,
+    fontWeight: '800',
+    marginLeft: 4,
+  },
+  carbonPaceBadge: {
+    backgroundColor: '#1C1C24',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'flex-end',
+  },
+  carbonPaceLabel: {
+    color: '#71717A',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+  carbonPaceVal: {
+    color: '#D7FF00',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  carbonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  carbonGridCell: {
+    width: '48%',
+    backgroundColor: '#16161E',
+    borderRadius: 8,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  carbonGridLbl: {
+    color: '#71717A',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+  carbonGridVal: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+
+  // VIP MODAL STYLES
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    justifyContent: 'flex-end',
+  },
+  vipModalCard: {
+    backgroundColor: '#14141A',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderColor: '#FFD700',
+    padding: 24,
+    paddingBottom: 36,
+  },
+  vipCrownBadgeModal: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  vipModalTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  vipModalDesc: {
+    color: '#A1A1AA',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 16,
+    paddingHorizontal: 6,
+  },
+  vipPerksBox: {
+    backgroundColor: '#1C1C24',
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    marginBottom: 18,
+  },
+  vipPerkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vipPerkText: {
+    color: '#E4E4E7',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  vipUpgradeBtn: {
+    backgroundColor: '#FFD700',
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vipUpgradeBtnText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '900',
+  }
 });
