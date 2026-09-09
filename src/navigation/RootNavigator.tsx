@@ -12,6 +12,9 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import ShareStoryScreen from '../screens/ShareStoryScreen';
 import InviteFriendsScreen from '../screens/InviteFriendsScreen';
+import UserProfileScreen from '../screens/UserProfileScreen';
+import ChatScreen from '../screens/ChatScreen';
+import ConversationsScreen from '../screens/ConversationsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -84,6 +87,21 @@ export default function RootNavigator() {
             name="InviteFriends" 
             component={InviteFriendsScreen} 
             options={{ headerShown: true, title: 'Undang Teman & Atlet' }} 
+          />
+          <Stack.Screen 
+            name="UserProfile" 
+            component={UserProfileScreen} 
+            options={{ headerShown: true, title: 'Profil Atlet' }} 
+          />
+          <Stack.Screen 
+            name="Chat" 
+            component={ChatScreen} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="Conversations" 
+            component={ConversationsScreen} 
+            options={{ headerShown: false }} 
           />
         </>
       ) : (

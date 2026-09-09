@@ -100,6 +100,16 @@ export default function BottomTabNavigator() {
               >
                 <Ionicons name="person-add-outline" size={20} color="#D7FF00" />
               </TouchableOpacity>
+              <TouchableOpacity 
+                style={{ marginRight: 14 }}
+                onPress={() => {
+                  // @ts-ignore
+                  navigation.navigate('Conversations');
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={21} color="#D7FF00" />
+              </TouchableOpacity>
               <TouchableOpacity style={styles.headerRightBtn}>
                 <Ionicons name="notifications-outline" size={21} color="#FFFFFF" />
                 <View style={styles.notificationDot} />

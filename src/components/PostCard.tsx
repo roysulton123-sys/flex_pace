@@ -16,6 +16,7 @@ import {
   Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
 export interface PostComment {
@@ -54,6 +55,7 @@ interface PostCardProps {
 }
 
 export default function PostCard({ post, currentUserId, onPostUpdated }: PostCardProps) {
+  const navigation = useNavigation<any>();
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
   const [isLiking, setIsLiking] = useState(false);
@@ -329,26 +331,38 @@ export default function PostCard({ post, currentUserId, onPostUpdated }: PostCar
     <View style={styles.card}>
       {/* Header: Foto Profil, Nama, Waktu */}
       <View style={styles.header}>
-        <View style={[styles.avatarRing, post.profiles?.is_premium && styles.avatarRingVip]}>
-          <Image source={{ uri: userAvatar }} style={styles.avatar} />
-        </View>
-        <View style={styles.headerInfo}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={[styles.userName, post.profiles?.is_premium && styles.userNameVip]}>{userName}</Text>
-            {post.profiles?.is_premium && (
-              <View style={styles.vipBadgePill}>
-                <Ionicons name="trophy" size={9} color="#000000" style={{ marginRight: 2 }} />
-                <Text style={styles.vipBadgeText}>VIP</Text>
-              </View>
-            )}
-            {post.sport_type && (
-              <View style={styles.sportBadge}>
-                <Text style={styles.sportBadgeText}>{post.sport_type}</Text>
-              </View>
-            )}
+        <TouchableOpacity 
+          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+          onPress={() => {
+            navigation.navigate('UserProfile', {
+              userId: post.user_id,
+              userName,
+              userAvatar,
+            });
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.avatarRing, post.profiles?.is_premium && styles.avatarRingVip]}>
+            <Image source={{ uri: userAvatar }} style={styles.avatar} />
           </View>
-          <Text style={styles.timestamp}>{formatDate(post.created_at)}</Text>
-        </View>
+          <View style={styles.headerInfo}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.userName, post.profiles?.is_premium && styles.userNameVip]}>{userName}</Text>
+              {post.profiles?.is_premium && (
+                <View style={styles.vipBadgePill}>
+                  <Ionicons name="trophy" size={9} color="#000000" style={{ marginRight: 2 }} />
+                  <Text style={styles.vipBadgeText}>VIP</Text>
+                </View>
+              )}
+              {post.sport_type && (
+                <View style={styles.sportBadge}>
+                  <Text style={styles.sportBadgeText}>{post.sport_type}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.timestamp}>{formatDate(post.created_at)}</Text>
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.moreButton} onPress={handleMoreOptions} activeOpacity={0.7}>
           <Ionicons name="ellipsis-horizontal" size={20} color="#999999" />
         </TouchableOpacity>

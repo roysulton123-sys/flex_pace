@@ -14,6 +14,7 @@ import {
   Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 
@@ -29,6 +30,7 @@ const STORAGE_KEY_WEB_URL = '@flexpace_download_website_url';
 const DEFAULT_WEB_URL = 'https://flexpace.my.id/download';
 
 export default function InviteFriendsScreen() {
+  const navigation = useNavigation<any>();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [inviteCode, setInviteCode] = useState('FP-ATHLETE');
   const [websiteUrl, setWebsiteUrl] = useState(DEFAULT_WEB_URL);
@@ -261,21 +263,32 @@ export default function InviteFriendsScreen() {
           const isFollowing = !!followingMap[item.id];
           return (
             <View style={styles.athleteCard}>
-              <Image 
-                source={{ uri: item.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80' }} 
-                style={styles.athleteAvatar} 
-              />
-              <View style={styles.athleteInfo}>
-                <View style={styles.athleteNameRow}>
-                  <Text style={styles.athleteName}>{item.name || 'Flex Athlete'}</Text>
-                  {item.role === 'organizer' && (
-                    <View style={styles.organizerBadge}>
-                      <Text style={styles.organizerBadgeText}>ORGANIZER</Text>
-                    </View>
-                  )}
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}
+                onPress={() => navigation.navigate('UserProfile', { 
+                  userId: item.id, 
+                  userName: item.name, 
+                  userAvatar: item.avatar_url,
+                  isVip: item.is_premium
+                })}
+                activeOpacity={0.7}
+              >
+                <Image 
+                  source={{ uri: item.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80' }} 
+                  style={styles.athleteAvatar} 
+                />
+                <View style={styles.athleteInfo}>
+                  <View style={styles.athleteNameRow}>
+                    <Text style={styles.athleteName}>{item.name || 'Flex Athlete'}</Text>
+                    {item.role === 'organizer' && (
+                      <View style={styles.organizerBadge}>
+                        <Text style={styles.organizerBadgeText}>ORGANIZER</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.athleteTag}>🏃 Atlet Flex Pace • Tap profil</Text>
                 </View>
-                <Text style={styles.athleteTag}>🏃 Atlet Flex Pace</Text>
-              </View>
+              </TouchableOpacity>
 
               <TouchableOpacity 
                 style={[styles.followBtn, isFollowing && styles.followBtnActive]}
