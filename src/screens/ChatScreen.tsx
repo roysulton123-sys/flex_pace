@@ -11,7 +11,8 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   Alert,
-  ScrollView
+  ScrollView,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -45,6 +46,13 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  // Multi-Select Message Deletion Mode (via Long Press)
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+
+  // 3-Dots Menu Modal State
+  const [menuModalVisible, setMenuModalVisible] = useState(false);
 
   // BBM PING Screen Buzz Shake Animation
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -110,6 +118,149 @@ export default function ChatScreen() {
     }
   };
 
+  // Multi-Select Message Handlers via Long-Press
+  const handleMessageLongPress = (msg: ChatMessage) => {
+    if (!isSelectionMode) {
+      setIsSelectionMode(true);
+      setSelectedMessageIds([msg.id]);
+    } else {
+      toggleSelectMessage(msg.id);
+    }
+  };
+
+  const handleMessagePress = (msg: ChatMessage) => {
+    if (isSelectionMode) {
+      toggleSelectMessage(msg.id);
+    }
+  };
+
+  const toggleSelectMessage = (id: string) => {
+    setSelectedMessageIds(prev => {
+      if (prev.includes(id)) {
+        const next = prev.filter(mId => mId !== id);
+        if (next.length === 0) {
+          setIsSelectionMode(false);
+        }
+        return next;
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedMessageIds.length === messages.length) {
+      setSelectedMessageIds([]);
+      setIsSelectionMode(false);
+    } else {
+      setSelectedMessageIds(messages.map(m => m.id));
+    }
+  };
+
+  const handleCancelSelection = () => {
+    setIsSelectionMode(false);
+    setSelectedMessageIds([]);
+  };
+
+  const handleDeleteSelectedMessages = () => {
+    if (selectedMessageIds.length === 0) return;
+    Alert.alert(
+      `Hapus ${selectedMessageIds.length} Pesan?`,
+      'Pesan yang dipilih akan dihapus secara permanen dari percakapan.',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: `Hapus (${selectedMessageIds.length})`,
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const updated = messages.filter(m => !selectedMessageIds.includes(m.id));
+              setMessages(updated);
+              setIsSelectionMode(false);
+              setSelectedMessageIds([]);
+              await AsyncStorage.setItem(chatStorageKey, JSON.stringify(updated));
+              if (updated.length > 0) {
+                await saveConversationEntry(currentUserId, updated[updated.length - 1]);
+              }
+            } catch (e) {
+              console.log('Error deleting selected messages:', e);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // 3-Dots Menu Actions
+  const handleArchiveChat = async () => {
+    setMenuModalVisible(false);
+    try {
+      const archiveKey = '@fp_archived_chats';
+      const arcJson = await AsyncStorage.getItem(archiveKey);
+      let arcList: any[] = arcJson ? JSON.parse(arcJson) : [];
+      if (!arcList.some(c => c.recipientId === recipientId)) {
+        arcList.unshift({
+          recipientId,
+          recipientName: recipientName || 'Flex Athlete',
+          recipientAvatar: recipientAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
+          isVip: !!isVip,
+          lastMessage: messages.length > 0 ? messages[messages.length - 1].text : 'Obrolan diarsipkan',
+          timestamp: new Date().toISOString(),
+          pin: recipientPin,
+        });
+        await AsyncStorage.setItem(archiveKey, JSON.stringify(arcList));
+      }
+      // Hapus dari percakapan aktif
+      const convKey = '@fp_active_conversations';
+      const convJson = await AsyncStorage.getItem(convKey);
+      if (convJson) {
+        let convs: any[] = JSON.parse(convJson);
+        convs = convs.filter(c => c.recipientId !== recipientId);
+        await AsyncStorage.setItem(convKey, JSON.stringify(convs));
+      }
+      Alert.alert('Arsip Berhasil', `Percakapan dengan ${recipientName || 'atlet ini'} telah diarsipkan.`);
+      navigation.goBack();
+    } catch (e) {
+      console.log('Error archiving chat:', e);
+    }
+  };
+
+  const handleBlockUser = async () => {
+    setMenuModalVisible(false);
+    Alert.alert(
+      'Blokir Kontak Atlet?',
+      `Apakah Anda yakin ingin memblokir ${recipientName || 'atlet ini'}? Anda tidak akan menerima pesan dari pengguna ini.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Blokir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const blockKey = '@fp_blocked_users';
+              const blkJson = await AsyncStorage.getItem(blockKey);
+              let blkList: any[] = blkJson ? JSON.parse(blkJson) : [];
+              if (!blkList.some(u => u.id === recipientId)) {
+                blkList.push({
+                  id: recipientId,
+                  name: recipientName || 'Flex Athlete',
+                  avatar: recipientAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
+                  pin: recipientPin,
+                  blockedAt: new Date().toISOString(),
+                });
+                await AsyncStorage.setItem(blockKey, JSON.stringify(blkList));
+              }
+              Alert.alert('Pengguna Diblokir', `${recipientName || 'Atlet ini'} berhasil ditambahkan ke daftar blokir.`);
+              navigation.goBack();
+            } catch (e) {
+              console.log('Error blocking user:', e);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleClearChatHistory = () => {
     Alert.alert(
       'Hapus Riwayat Chat?',
@@ -134,32 +285,6 @@ export default function ChatScreen() {
               Alert.alert('Sukses', 'Riwayat chat telah dibersihkan.');
             } catch (e) {
               console.log('Error clearing chat history:', e);
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleDeleteSingleMessage = (msg: ChatMessage) => {
-    Alert.alert(
-      'Hapus Pesan?',
-      'Apakah Anda ingin menghapus pesan ini?',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const updated = messages.filter(m => m.id !== msg.id);
-              setMessages(updated);
-              await AsyncStorage.setItem(chatStorageKey, JSON.stringify(updated));
-              if (updated.length > 0) {
-                await saveConversationEntry(currentUserId, updated[updated.length - 1]);
-              }
-            } catch (e) {
-              console.log('Error deleting message:', e);
             }
           }
         }
@@ -236,61 +361,53 @@ export default function ChatScreen() {
 
   return (
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
-      {/* HEADER OBROLAN */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
+      {/* HEADER OBROLAN ATAU SELECTION BAR */}
+      {isSelectionMode ? (
+        <View style={styles.selectionHeader}>
+          <TouchableOpacity 
+            style={styles.selectionCancelBtn}
+            onPress={handleCancelSelection}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.headerUserRow}
-          onPress={() => {
-            navigation.navigate('UserProfile', {
-              userId: recipientId,
-              userName: recipientName,
-              userAvatar: recipientAvatar,
-            });
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.avatarWrap, isVip && styles.avatarWrapVip]}>
-            <Image 
-              source={{ uri: recipientAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80' }} 
-              style={styles.headerAvatar} 
-            />
-            <View style={styles.onlineDot} />
-          </View>
+          <Text style={styles.selectionTitleText}>
+            {selectedMessageIds.length} Pesan Dipilih
+          </Text>
 
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.headerName} numberOfLines={1}>{recipientName || 'Flex Athlete'}</Text>
-              {isVip && (
-                <View style={styles.vipBadge}>
-                  <Text style={styles.vipBadgeText}>VIP</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.headerPinText}>PIN: {recipientPin} • Online</Text>
-          </View>
-        </TouchableOpacity>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {messages.length > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity 
-              style={styles.clearChatBtn}
-              onPress={handleClearChatHistory}
-              activeOpacity={0.8}
+              style={styles.selectAllChip}
+              onPress={handleSelectAll}
+              activeOpacity={0.7}
             >
-              <Ionicons name="trash-outline" size={20} color="#FF453A" />
+              <Text style={styles.selectAllChipText}>
+                {selectedMessageIds.length === messages.length ? 'Batal Semua' : 'Pilih Semua'}
+              </Text>
             </TouchableOpacity>
-          )}
+
+            <TouchableOpacity 
+              style={styles.selectionDeleteBtn}
+              onPress={handleDeleteSelectedMessages}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash" size={20} color="#FF453A" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
 
           <TouchableOpacity 
-            style={styles.viewProfileBtn}
+            style={styles.headerUserRow}
             onPress={() => {
               navigation.navigate('UserProfile', {
                 userId: recipientId,
@@ -300,10 +417,37 @@ export default function ChatScreen() {
             }}
             activeOpacity={0.8}
           >
-            <Ionicons name="person-circle-outline" size={26} color="#D7FF00" />
+            <View style={[styles.avatarWrap, isVip && styles.avatarWrapVip]}>
+              <Image 
+                source={{ uri: recipientAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80' }} 
+                style={styles.headerAvatar} 
+              />
+              <View style={styles.onlineDot} />
+            </View>
+
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.headerName} numberOfLines={1}>{recipientName || 'Flex Athlete'}</Text>
+                {isVip && (
+                  <View style={styles.vipBadge}>
+                    <Text style={styles.vipBadgeText}>VIP</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.headerPinText}>PIN: {recipientPin} • Online</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Tombol Titik 3 Menu Setelan */}
+          <TouchableOpacity 
+            style={styles.threeDotsBtn}
+            onPress={() => setMenuModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="ellipsis-vertical" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* QUICK GREETING CHIPS */}
       <View style={styles.quickChipsBar}>
@@ -346,22 +490,43 @@ export default function ChatScreen() {
         }
         renderItem={({ item }) => {
           const isMine = item.senderId === currentUserId;
+          const isSelected = selectedMessageIds.includes(item.id);
 
           // 1. Render Pesan PING!!! BBM
           if (item.isPing) {
             return (
               <TouchableOpacity 
-                activeOpacity={0.9} 
-                onLongPress={() => handleDeleteSingleMessage(item)}
-                style={[styles.pingContainer, isMine ? styles.pingRight : styles.pingLeft]}
+                activeOpacity={0.85} 
+                onPress={() => handleMessagePress(item)}
+                onLongPress={() => handleMessageLongPress(item)}
+                style={[
+                  styles.pingRowWrapper,
+                  isSelected && styles.selectedRowWrapper,
+                  isMine ? styles.pingRight : styles.pingLeft
+                ]}
               >
-                <View style={[styles.pingBubble, isMine ? styles.pingBubbleMine : styles.pingBubbleOther]}>
-                  <Ionicons name="flash" size={16} color={isMine ? "#000000" : "#FFD700"} style={{ marginRight: 6 }} />
-                  <Text style={[styles.pingText, isMine ? styles.pingTextMine : styles.pingTextOther]}>
-                    * P I N G ! ! ! *
-                  </Text>
+                {isSelectionMode && (
+                  <View style={styles.selectionCheckCircle}>
+                    <Ionicons 
+                      name={isSelected ? "checkbox" : "square-outline"} 
+                      size={20} 
+                      color={isSelected ? "#D7FF00" : "#71717A"} 
+                    />
+                  </View>
+                )}
+                <View style={styles.pingContainer}>
+                  <View style={[
+                    styles.pingBubble, 
+                    isMine ? styles.pingBubbleMine : styles.pingBubbleOther,
+                    isSelected && styles.pingBubbleSelected
+                  ]}>
+                    <Ionicons name="flash" size={16} color={isMine ? "#000000" : "#FFD700"} style={{ marginRight: 6 }} />
+                    <Text style={[styles.pingText, isMine ? styles.pingTextMine : styles.pingTextOther]}>
+                      * P I N G ! ! ! *
+                    </Text>
+                  </View>
+                  <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
                 </View>
-                <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
               </TouchableOpacity>
             );
           }
@@ -371,43 +536,67 @@ export default function ChatScreen() {
             const card = item.promoCard;
             return (
               <TouchableOpacity 
-                activeOpacity={0.95}
-                onLongPress={() => handleDeleteSingleMessage(item)}
-                style={[styles.msgWrapper, isMine ? styles.msgRight : styles.msgLeft]}
+                activeOpacity={0.9}
+                onPress={() => handleMessagePress(item)}
+                onLongPress={() => handleMessageLongPress(item)}
+                style={[
+                  styles.cardRowWrapper,
+                  isSelected && styles.selectedRowWrapper,
+                  isMine ? styles.msgRight : styles.msgLeft
+                ]}
               >
-                <View style={[styles.cardBubble, isMine ? styles.cardBubbleMine : styles.cardBubbleOther]}>
-                  <View style={styles.cardBubbleHeader}>
-                    <Ionicons name="megaphone" size={13} color="#FFD700" style={{ marginRight: 4 }} />
-                    <Text style={styles.cardBubbleLabel}>REKOMENDASI ATLET FLEX PACE</Text>
+                {isSelectionMode && (
+                  <View style={styles.selectionCheckCircle}>
+                    <Ionicons 
+                      name={isSelected ? "checkbox" : "square-outline"} 
+                      size={20} 
+                      color={isSelected ? "#D7FF00" : "#71717A"} 
+                    />
                   </View>
-
-                  <View style={styles.cardBubbleBody}>
-                    <Image source={{ uri: card.avatar }} style={styles.cardBubbleAvatar} />
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={styles.cardBubbleName}>{card.name}</Text>
-                      <View style={styles.cardPinPill}>
-                        <Text style={styles.cardPinText}>PIN: {card.pin}</Text>
-                      </View>
-                      <Text style={styles.cardStatsText}>{card.stats}</Text>
+                )}
+                <View style={styles.msgWrapper}>
+                  <View style={[
+                    styles.cardBubble, 
+                    isMine ? styles.cardBubbleMine : styles.cardBubbleOther,
+                    isSelected && styles.cardBubbleSelected
+                  ]}>
+                    <View style={styles.cardBubbleHeader}>
+                      <Ionicons name="megaphone" size={13} color="#FFD700" style={{ marginRight: 4 }} />
+                      <Text style={styles.cardBubbleLabel}>REKOMENDASI ATLET FLEX PACE</Text>
                     </View>
-                  </View>
 
-                  <TouchableOpacity 
-                    style={styles.cardActionBtn}
-                    onPress={() => {
-                      navigation.navigate('UserProfile', {
-                        userId: recipientId,
-                        userName: card.name,
-                        userAvatar: card.avatar,
-                      });
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.cardActionBtnText}>Lihat Profil & Tambahkan</Text>
-                    <Ionicons name="chevron-forward" size={14} color="#000000" />
-                  </TouchableOpacity>
+                    <View style={styles.cardBubbleBody}>
+                      <Image source={{ uri: card.avatar }} style={styles.cardBubbleAvatar} />
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.cardBubbleName}>{card.name}</Text>
+                        <View style={styles.cardPinPill}>
+                          <Text style={styles.cardPinText}>PIN: {card.pin}</Text>
+                        </View>
+                        <Text style={styles.cardStatsText}>{card.stats}</Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity 
+                      style={styles.cardActionBtn}
+                      onPress={() => {
+                        if (isSelectionMode) {
+                          handleMessagePress(item);
+                          return;
+                        }
+                        navigation.navigate('UserProfile', {
+                          userId: recipientId,
+                          userName: card.name,
+                          userAvatar: card.avatar,
+                        });
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.cardActionBtnText}>Lihat Profil & Tambahkan</Text>
+                      <Ionicons name="chevron-forward" size={14} color="#000000" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
                 </View>
-                <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
               </TouchableOpacity>
             );
           }
@@ -416,15 +605,35 @@ export default function ChatScreen() {
           return (
             <TouchableOpacity 
               activeOpacity={0.9}
-              onLongPress={() => handleDeleteSingleMessage(item)}
-              style={[styles.msgWrapper, isMine ? styles.msgRight : styles.msgLeft]}
+              onPress={() => handleMessagePress(item)}
+              onLongPress={() => handleMessageLongPress(item)}
+              style={[
+                styles.textRowWrapper,
+                isSelected && styles.selectedRowWrapper,
+                isMine ? styles.msgRight : styles.msgLeft
+              ]}
             >
-              <View style={[styles.msgBubble, isMine ? styles.msgBubbleMine : styles.msgBubbleOther]}>
-                <Text style={[styles.msgText, isMine ? styles.msgTextMine : styles.msgTextOther]}>
-                  {item.text}
-                </Text>
+              {isSelectionMode && (
+                <View style={styles.selectionCheckCircle}>
+                  <Ionicons 
+                    name={isSelected ? "checkbox" : "square-outline"} 
+                    size={20} 
+                    color={isSelected ? "#D7FF00" : "#71717A"} 
+                  />
+                </View>
+              )}
+              <View style={styles.msgWrapper}>
+                <View style={[
+                  styles.msgBubble, 
+                  isMine ? styles.msgBubbleMine : styles.msgBubbleOther,
+                  isSelected && styles.msgBubbleSelected
+                ]}>
+                  <Text style={[styles.msgText, isMine ? styles.msgTextMine : styles.msgTextOther]}>
+                    {item.text}
+                  </Text>
+                </View>
+                <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
               </View>
-              <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
             </TouchableOpacity>
           );
         }}
@@ -472,6 +681,107 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* 3-DOTS SETTINGS MODAL */}
+      <Modal
+        visible={menuModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => setMenuModalVisible(false)}
+        >
+          <View style={styles.menuDropdownCard}>
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuHeaderTitle}>PILIHAN OBROLAN</Text>
+              <Text style={styles.menuHeaderPin}>PIN: {recipientPin}</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.menuRow} 
+              onPress={() => {
+                setMenuModalVisible(false);
+                navigation.navigate('UserProfile', {
+                  userId: recipientId,
+                  userName: recipientName,
+                  userAvatar: recipientAvatar,
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconCircle, { backgroundColor: '#1E1E26' }]}>
+                <Ionicons name="person-circle-outline" size={20} color="#D7FF00" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.menuRowTitle}>Lihat Profil Atlet</Text>
+                <Text style={styles.menuRowSub}>Lihat statistik pace & bio atlet</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#71717A" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.menuRow} 
+              onPress={handleArchiveChat}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconCircle, { backgroundColor: '#1E1E26' }]}>
+                <Ionicons name="archive-outline" size={18} color="#60A5FA" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.menuRowTitle}>Arsipkan Chat</Text>
+                <Text style={styles.menuRowSub}>Pindahkan ke folder arsip terpisah</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#71717A" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.menuRow} 
+              onPress={handleBlockUser}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconCircle, { backgroundColor: '#2D1B1B' }]}>
+                <Ionicons name="ban-outline" size={18} color="#FF9F0A" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.menuRowTitle, { color: '#FF9F0A' }]}>Blokir Kontak</Text>
+                <Text style={styles.menuRowSub}>Hentikan pesan dari atlet ini</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#71717A" />
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity 
+              style={styles.menuRow} 
+              onPress={() => {
+                setMenuModalVisible(false);
+                handleClearChatHistory();
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconCircle, { backgroundColor: '#3A1414' }]}>
+                <Ionicons name="trash-outline" size={18} color="#FF453A" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.menuRowTitle, { color: '#FF453A' }]}>Bersihkan Riwayat Chat</Text>
+                <Text style={styles.menuRowSub}>Hapus seluruh pesan di obrolan ini</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#71717A" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.menuCloseBtn}
+              onPress={() => setMenuModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.menuCloseBtnText}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Animated.View>
   );
 }
@@ -800,6 +1110,167 @@ const styles = StyleSheet.create({
   clearChatBtn: {
     padding: 6,
     marginRight: 2,
+  },
+  threeDotsBtn: {
+    padding: 6,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 14,
+    backgroundColor: '#181820',
+    borderBottomWidth: 1,
+    borderBottomColor: '#D7FF00',
+  },
+  selectionCancelBtn: {
+    padding: 6,
+  },
+  selectionTitleText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  selectAllChip: {
+    backgroundColor: '#272732',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  selectAllChipText: {
+    color: '#D7FF00',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  selectionDeleteBtn: {
+    padding: 6,
+    backgroundColor: 'rgba(255, 69, 58, 0.15)',
+    borderRadius: 8,
+  },
+  pingRowWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+  },
+  cardRowWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+  },
+  textRowWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+  },
+  selectedRowWrapper: {
+    backgroundColor: 'rgba(215, 255, 0, 0.08)',
+    borderRadius: 12,
+  },
+  selectionCheckCircle: {
+    marginRight: 8,
+    padding: 2,
+  },
+  pingBubbleSelected: {
+    borderWidth: 2,
+    borderColor: '#D7FF00',
+  },
+  cardBubbleSelected: {
+    borderWidth: 2,
+    borderColor: '#D7FF00',
+  },
+  msgBubbleSelected: {
+    borderWidth: 2,
+    borderColor: '#D7FF00',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  menuDropdownCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#16161E',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 8,
+  },
+  menuHeaderTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  menuHeaderPin: {
+    color: '#FFD700',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  menuIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuRowTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  menuRowSub: {
+    color: '#71717A',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginVertical: 4,
+  },
+  menuCloseBtn: {
+    marginTop: 12,
+    backgroundColor: '#20202A',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  menuCloseBtnText: {
+    color: '#A1A1AA',
+    fontSize: 13,
+    fontWeight: '700',
   },
   emptyChatBox: {
     alignItems: 'center',
