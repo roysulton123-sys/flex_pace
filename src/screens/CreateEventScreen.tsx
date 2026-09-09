@@ -17,6 +17,7 @@ import { decode } from 'base64-arraybuffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
+import { WebView } from 'react-native-webview';
 
 interface PresetCategory {
   id: string;
@@ -25,6 +26,18 @@ interface PresetCategory {
   defaultCover: string;
   defaultLogo: string;
 }
+
+// Rekomendasi Titik Kumpul Populer Komunitas Lari & Sepeda
+const POPULAR_MEETING_POINTS = [
+  { name: 'GBK Senayan, Jakarta Pusat', lat: -6.2185, lng: 106.8018 },
+  { name: 'Monas, Jakarta Pusat', lat: -6.1754, lng: 106.8272 },
+  { name: 'Tebet Eco Park, Jakarta Selatan', lat: -6.2366, lng: 106.8533 },
+  { name: 'Lapangan Gasibu, Bandung', lat: -6.9004, lng: 107.6186 },
+  { name: 'Stadion Manahan, Solo', lat: -7.5552, lng: 110.8066 },
+  { name: 'Simpang Lima, Semarang', lat: -6.9904, lng: 110.4229 },
+  { name: 'Taman Bungkul, Surabaya', lat: -7.2913, lng: 112.7398 },
+  { name: 'Lapangan Puputan Renon, Bali', lat: -8.6713, lng: 115.2338 },
+];
 
 // Kategori rapi & terpadu: Marathon hanya 1 tombol tanpa pembagian jarak membingungkan
 const EVENT_PRESETS: PresetCategory[] = [
@@ -84,6 +97,112 @@ export default function CreateEventScreen() {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [paymentMethod, setPaymentMethod] = useState<'qris' | 'va'>('qris');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  // Interactive Map Location Picker State
+  const [mapPickerVisible, setMapPickerVisible] = useState(false);
+  const [pickerCoords, setPickerCoords] = useState<{ latitude: number; longitude: number }>({
+    latitude: -6.2185,
+    longitude: 106.8018,
+  });
+  const [pickerAddress, setPickerAddress] = useState('Gelora Bung Karno (GBK), Jakarta');
+  const [searchLocationQuery, setSearchLocationQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ name: string; lat: number; lng: number }[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const mapWebViewRef = React.useRef<any>(null);
+
+  const handleSearchLocation = async (text: string) => {
+    setSearchLocationQuery(text);
+    if (!text.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const matchedPresets = POPULAR_MEETING_POINTS.filter(p => 
+      p.name.toLowerCase().includes(text.toLowerCase())
+    );
+    setSearchResults(matchedPresets);
+
+    if (text.trim().length >= 3) {
+      setIsSearchingLocation(true);
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text.trim())}&countrycodes=id&limit=5`;
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'FlexPaceApp/1.0' }
+        });
+        const data = await res.json();
+        if (data && Array.isArray(data) && data.length > 0) {
+          const apiResults = data.map((item: any) => ({
+            name: item.display_name,
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+          }));
+          setSearchResults(prev => {
+            const combined = [...matchedPresets, ...apiResults.filter((ar: any) => !matchedPresets.some(mp => Math.abs(mp.lat - ar.lat) < 0.001))];
+            return combined;
+          });
+        }
+      } catch (err) {
+        console.log('Error searching location via API:', err);
+      } finally {
+        setIsSearchingLocation(false);
+      }
+    }
+  };
+
+  const handleSelectLocationItem = (item: { name: string; lat: number; lng: number }) => {
+    setPickerCoords({ latitude: item.lat, longitude: item.lng });
+    const cleanAddress = item.name.split(',').slice(0, 3).join(', ').trim();
+    setPickerAddress(cleanAddress || item.name);
+    setSearchResults([]);
+    setSearchLocationQuery('');
+
+    if (mapWebViewRef.current) {
+      mapWebViewRef.current.injectJavaScript(`
+        if (window.updateMapLocation) {
+          window.updateMapLocation(${item.lat}, ${item.lng});
+        }
+        true;
+      `);
+    }
+  };
+
+  const handleMapMessage = async (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'location_changed') {
+        const { lat, lng } = data;
+        setPickerCoords({ latitude: lat, longitude: lng });
+
+        setIsGeocoding(true);
+        try {
+          const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+          const res = await fetch(url, {
+            headers: { 'User-Agent': 'FlexPaceApp/1.0' }
+          });
+          const geo = await res.json();
+          if (geo && geo.display_name) {
+            const parts = geo.display_name.split(',');
+            const clean = parts.slice(0, 3).join(', ').trim();
+            setPickerAddress(clean || geo.display_name);
+          } else {
+            setPickerAddress(`Titik Lokasi: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          }
+        } catch (e) {
+          setPickerAddress(`Titik Lokasi: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+        } finally {
+          setIsGeocoding(false);
+        }
+      }
+    } catch (e) {
+      console.log('Error handling map message:', e);
+    }
+  };
+
+  const handleConfirmPickedLocation = () => {
+    setLocation(pickerAddress);
+    setMapPickerVisible(false);
+  };
 
   useEffect(() => {
     checkMembershipStatus();
@@ -424,7 +543,21 @@ export default function CreateEventScreen() {
 
       {/* Lokasi / Titik Kumpul */}
       <View style={styles.formGroup}>
-        <Text style={styles.label}>LOKASI / TITIK KUMPUL (VENUE)</Text>
+        <View style={styles.locationLabelRow}>
+          <Text style={styles.label}>LOKASI / TITIK KUMPUL (VENUE)</Text>
+          <TouchableOpacity 
+            style={styles.openMapBtn}
+            onPress={() => {
+              setPickerAddress(location || 'Gelora Bung Karno (GBK), Jakarta');
+              setMapPickerVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="map" size={13} color="#000000" style={{ marginRight: 4 }} />
+            <Text style={styles.openMapBtnText}>Tentukan di Peta</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.inputWithIcon}>
           <Ionicons name="location" size={18} color="#D7FF00" style={{ marginRight: 8 }} />
           <TextInput 
@@ -435,6 +568,9 @@ export default function CreateEventScreen() {
             onChangeText={setLocation} 
           />
         </View>
+        <Text style={styles.locationTipText}>
+          📍 Tentukan titik kumpul melalui pencarian atau geser pin manual di peta interaktif.
+        </Text>
       </View>
 
       {/* Tanggal Event */}
@@ -635,6 +771,210 @@ export default function CreateEventScreen() {
               onPress={() => setMembershipModalVisible(false)}
             >
               <Text style={styles.closeModalText}>Nanti Saja (Kembali)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL PILIH TITIK KUMPUL DI PETA (LEAFLET INTERAKTIF & SEARCH) */}
+      <Modal
+        visible={mapPickerVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setMapPickerVisible(false)}
+      >
+        <View style={styles.mapPickerContainer}>
+          {/* Header Picker */}
+          <View style={styles.mapPickerHeader}>
+            <TouchableOpacity 
+              style={styles.mapPickerCloseBtn}
+              onPress={() => setMapPickerVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.mapPickerHeaderTitle}>TENTUKAN TITIK KUMPUL</Text>
+              <Text style={styles.mapPickerHeaderSubtitle}>Cari tempat atau geser pin langsung di peta</Text>
+            </View>
+          </View>
+
+          {/* Search Bar Lokasi & Rekomendasi Titik */}
+          <View style={styles.mapSearchBarWrap}>
+            <View style={styles.mapSearchBar}>
+              <Ionicons name="search" size={18} color="#D7FF00" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.mapSearchInput}
+                placeholder="Cari stadion, taman, atau jalan..."
+                placeholderTextColor="#71717A"
+                value={searchLocationQuery}
+                onChangeText={handleSearchLocation}
+              />
+              {isSearchingLocation && (
+                <ActivityIndicator size="small" color="#D7FF00" style={{ marginRight: 6 }} />
+              )}
+              {searchLocationQuery.length > 0 && (
+                <TouchableOpacity onPress={() => handleSearchLocation('')}>
+                  <Ionicons name="close-circle" size={18} color="#71717A" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Rekomendasi Titik Populer Chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.popularChipsScroll} contentContainerStyle={{ paddingHorizontal: 16 }}>
+              {POPULAR_MEETING_POINTS.map((pt, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.popularChip}
+                  onPress={() => handleSelectLocationItem(pt)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="flame" size={12} color="#D7FF00" style={{ marginRight: 4 }} />
+                  <Text style={styles.popularChipText}>{pt.name.split(',')[0]}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Hasil Pencarian Dropdown */}
+            {searchResults.length > 0 && (
+              <View style={styles.searchResultsDropdown}>
+                {searchResults.slice(0, 5).map((res, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.searchResultItem}
+                    onPress={() => handleSelectLocationItem(res)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="location-outline" size={16} color="#D7FF00" style={{ marginRight: 8, marginTop: 2 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.searchResultTitle} numberOfLines={1}>{res.name.split(',')[0]}</Text>
+                      <Text style={styles.searchResultSub} numberOfLines={1}>{res.name}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Peta Interaktif Leaflet WebView */}
+          <View style={styles.mapWebViewWrapper}>
+            <WebView
+              ref={mapWebViewRef}
+              style={{ flex: 1 }}
+              originWhitelist={['*']}
+              onMessage={handleMapMessage}
+              source={{
+                html: `
+                  <!DOCTYPE html>
+                  <html>
+                    <head>
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                      <style>
+                        body { padding: 0; margin: 0; background: #0A0A0C; font-family: -apple-system, sans-serif; }
+                        html, body, #map { height: 100%; width: 100vw; }
+                        .leaflet-control-attribution { display: none; }
+                        .custom-marker {
+                          background-color: #D7FF00;
+                          width: 24px;
+                          height: 24px;
+                          border-radius: 50%;
+                          border: 3px solid #000000;
+                          box-shadow: 0 0 16px rgba(215, 255, 0, 0.9);
+                          cursor: grab;
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <div id="map"></div>
+                      <script>
+                        var map = L.map('map', {
+                          zoomControl: true
+                        }).setView([${pickerCoords.latitude}, ${pickerCoords.longitude}], 16);
+                        
+                        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                          maxZoom: 19
+                        }).addTo(map);
+
+                        var markerIcon = L.divIcon({
+                          className: 'custom-marker',
+                          iconSize: [26, 26],
+                          iconAnchor: [13, 13]
+                        });
+                        
+                        var marker = L.marker([${pickerCoords.latitude}, ${pickerCoords.longitude}], {
+                          icon: markerIcon,
+                          draggable: true
+                        }).addTo(map);
+
+                        // Geser manual marker
+                        marker.on('dragend', function(e) {
+                          var latlng = e.target.getLatLng();
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: 'location_changed',
+                              lat: latlng.lat,
+                              lng: latlng.lng
+                            }));
+                          }
+                        });
+
+                        // Sentuh di mana saja di peta
+                        map.on('click', function(e) {
+                          marker.setLatLng(e.latlng);
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: 'location_changed',
+                              lat: e.latlng.lat,
+                              lng: e.latlng.lng
+                            }));
+                          }
+                        });
+
+                        window.updateMapLocation = function(lat, lng) {
+                          marker.setLatLng([lat, lng]);
+                          map.panTo([lat, lng]);
+                        };
+                      </script>
+                    </body>
+                  </html>
+                `
+              }}
+            />
+
+            {/* Hint Geser Marker di atas peta */}
+            <View style={styles.mapTouchHint}>
+              <Ionicons name="finger-print" size={14} color="#D7FF00" style={{ marginRight: 6 }} />
+              <Text style={styles.mapTouchHintText}>Sentuh atau geser pin kuning ke titik kumpul tepat</Text>
+            </View>
+          </View>
+
+          {/* Kartu Informasi Titik Terpilih & Tombol Konfirmasi */}
+          <View style={styles.mapPickerFooter}>
+            <View style={styles.pickedLocationBox}>
+              <View style={styles.pickedLocationHeader}>
+                <Ionicons name="navigate-circle" size={18} color="#D7FF00" style={{ marginRight: 6 }} />
+                <Text style={styles.pickedLocationLabel}>TITIK KUMPUL TERPILIH</Text>
+                {isGeocoding && (
+                  <ActivityIndicator size="small" color="#D7FF00" style={{ marginLeft: 6 }} />
+                )}
+              </View>
+              <Text style={styles.pickedAddressText} numberOfLines={2}>
+                {pickerAddress}
+              </Text>
+              <Text style={styles.pickedCoordsText}>
+                GPS: {pickerCoords.latitude.toFixed(5)}, {pickerCoords.longitude.toFixed(5)}
+              </Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.confirmPickedBtn}
+              onPress={handleConfirmPickedLocation}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#000000" style={{ marginRight: 6 }} />
+              <Text style={styles.confirmPickedBtnText}>Gunakan Titik Kumpul Ini</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1079,5 +1419,206 @@ const styles = StyleSheet.create({
     color: '#71717A',
     fontSize: 12,
     fontWeight: '700',
-  }
+  },
+
+  // LOCATION PICKER ENTRY STYLES
+  locationLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  openMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D7FF00',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  openMapBtnText: {
+    color: '#000000',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  locationTipText: {
+    color: '#71717A',
+    fontSize: 11,
+    marginTop: 6,
+    lineHeight: 16,
+  },
+
+  // LOCATION PICKER MODAL STYLES
+  mapPickerContainer: {
+    flex: 1,
+    backgroundColor: '#0A0A0C',
+  },
+  mapPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 14,
+    backgroundColor: '#121217',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  mapPickerCloseBtn: {
+    padding: 6,
+  },
+  mapPickerHeaderTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  mapPickerHeaderSubtitle: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  mapSearchBarWrap: {
+    backgroundColor: '#0E0E12',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    zIndex: 20,
+  },
+  mapSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#191920',
+    marginHorizontal: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  mapSearchInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+  },
+  popularChipsScroll: {
+    marginTop: 10,
+  },
+  popularChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1C1C24',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  popularChipText: {
+    color: '#E4E4E7',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  searchResultsDropdown: {
+    backgroundColor: '#16161D',
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 255, 0, 0.3)',
+    overflow: 'hidden',
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  searchResultTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  searchResultSub: {
+    color: '#71717A',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  mapWebViewWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
+  mapTouchHint: {
+    position: 'absolute',
+    top: 14,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 10, 12, 0.88)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 255, 0, 0.4)',
+    zIndex: 10,
+  },
+  mapTouchHintText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  mapPickerFooter: {
+    backgroundColor: '#121217',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  pickedLocationBox: {
+    backgroundColor: '#191922',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 255, 0, 0.25)',
+    marginBottom: 12,
+  },
+  pickedLocationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  pickedLocationLabel: {
+    color: '#D7FF00',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  pickedAddressText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  pickedCoordsText: {
+    color: '#71717A',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  confirmPickedBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#D7FF00',
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  confirmPickedBtnText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '900',
+  },
 });

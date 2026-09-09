@@ -198,6 +198,69 @@ ${trkpts}
     });
   };
 
+  const handleDeleteRoute = (route: RecordedRoute) => {
+    Alert.alert(
+      'Hapus Riwayat Rute?',
+      `Hapus rekaman rute ${route.sport_type} ${(route.distance_meters / 1000).toFixed(2)} KM dari riwayat?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('activities')
+                .delete()
+                .eq('id', route.id);
+
+              if (error) {
+                console.error('Error deleting activity from db:', error.message);
+              }
+
+              const updated = routes.filter(r => r.id !== route.id);
+              setRoutes(updated);
+              if (selectedRoute?.id === route.id) {
+                setSelectedRoute(updated.length > 0 ? updated[0] : null);
+              }
+              Alert.alert('Sukses', 'Riwayat rute berhasil dihapus.');
+            } catch (e: any) {
+              Alert.alert('Gagal Menghapus Rute', e.message || 'Terjadi kesalahan.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleClearAllRoutes = () => {
+    if (routes.length === 0) return;
+    Alert.alert(
+      'Hapus Semua Riwayat Rute?',
+      'Seluruh rute yang tercatat di riwayat Anda akan dihapus secara permanen.',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus Semua',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                await supabase.from('activities').delete().eq('user_id', user.id);
+              }
+              setRoutes([]);
+              setSelectedRoute(null);
+              Alert.alert('Sukses', 'Seluruh riwayat rute telah dibersihkan.');
+            } catch (e: any) {
+              Alert.alert('Gagal', e.message || 'Terjadi kesalahan.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // Tentukan koordinat untuk peta
   const activeCoordinates = selectedRoute?.route_coordinates || [];
   const mapCenter = activeCoordinates.length > 0 
@@ -240,8 +303,19 @@ ${trkpts}
             <Text style={styles.sectionTitle}>RIWAYAT RUTE YANG DILALUI</Text>
             <Text style={styles.sectionSubtitle}>Pilih rute untuk melihat garis jalur di radar peta</Text>
           </View>
-          <View style={styles.countPill}>
-            <Text style={styles.countPillText}>{routes.length} Rute</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.countPill}>
+              <Text style={styles.countPillText}>{routes.length} Rute</Text>
+            </View>
+            {routes.length > 0 && (
+              <TouchableOpacity 
+                style={styles.clearAllRoutesBtn}
+                onPress={handleClearAllRoutes}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={16} color="#FF453A" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -369,6 +443,16 @@ ${trkpts}
                     <Text style={[styles.gpxActionBtnText, isVipMember ? styles.gpxTextVip : styles.gpxTextLocked]}>
                       {isVipMember ? 'Ekspor GPX' : 'GPX 🔒'}
                     </Text>
+                  </TouchableOpacity>
+
+                  {/* HAPUS RUTE */}
+                  <TouchableOpacity 
+                    style={styles.deleteRouteActionBtn}
+                    onPress={() => handleDeleteRoute(item)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trash-outline" size={13} color="#FF453A" style={{ marginRight: 3 }} />
+                    <Text style={styles.deleteRouteActionBtnText}>Hapus</Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
@@ -703,15 +787,22 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
+  clearAllRoutesBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#1E1214',
+    borderWidth: 1,
+    borderColor: '#38161A',
+  },
   // GPX BUTTON & VIP MODAL
   gpxActionBtn: {
-    flex: 1.2,
+    flex: 1.1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
     borderRadius: 12,
-    marginLeft: 8,
+    marginLeft: 6,
     borderWidth: 1,
   },
   gpxBtnVip: {
@@ -731,6 +822,23 @@ const styles = StyleSheet.create({
   },
   gpxTextLocked: {
     color: '#71717A',
+  },
+  deleteRouteActionBtn: {
+    flex: 0.9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E1214',
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginLeft: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 69, 58, 0.25)',
+  },
+  deleteRouteActionBtnText: {
+    color: '#FF453A',
+    fontSize: 11,
+    fontWeight: '800',
   },
   modalBackdrop: {
     flex: 1,

@@ -8,7 +8,8 @@ import {
   Image, 
   TextInput, 
   ActivityIndicator,
-  RefreshControl 
+  RefreshControl,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -40,29 +41,7 @@ export default function ConversationsScreen() {
     try {
       const convKey = '@fp_active_conversations';
       const convJson = await AsyncStorage.getItem(convKey);
-      let list: ConversationItem[] = convJson ? JSON.parse(convJson) : [];
-
-      // Jika belum ada riwayat chat sama sekali, buatkan kontak awal atlet komunitas
-      if (list.length === 0) {
-        const { data: athletes } = await supabase
-          .from('profiles')
-          .select('id, name, avatar_url, is_premium')
-          .limit(4);
-
-        if (athletes && athletes.length > 0) {
-          list = athletes.map((a, idx) => ({
-            recipientId: a.id,
-            recipientName: a.name || `Atlet ${idx + 1}`,
-            recipientAvatar: a.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
-            isVip: !!a.is_premium,
-            lastMessage: idx === 0 ? '⚡ * P I N G ! ! ! *' : 'Halo! Salam kenal sesama pelari Flex Pace! 🏃',
-            timestamp: new Date(Date.now() - idx * 7200000).toISOString(),
-            pin: a.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase(),
-          }));
-          await AsyncStorage.setItem(convKey, JSON.stringify(list));
-        }
-      }
-
+      const list: ConversationItem[] = convJson ? JSON.parse(convJson) : [];
       setConversations(list);
     } catch (e) {
       console.log('Error loading conversations:', e);
@@ -70,6 +49,57 @@ export default function ConversationsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleDeleteConversation = (item: ConversationItem) => {
+    Alert.alert(
+      'Hapus Percakapan?',
+      `Apakah Anda yakin ingin menghapus seluruh percakapan dengan ${item.recipientName}? Riwayat pesan akan dibersihkan permanen.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const convKey = '@fp_active_conversations';
+              const updated = conversations.filter(c => c.recipientId !== item.recipientId);
+              setConversations(updated);
+              await AsyncStorage.setItem(convKey, JSON.stringify(updated));
+              await AsyncStorage.removeItem(`@fp_chat_${item.recipientId}`);
+            } catch (e) {
+              console.log('Error deleting conversation:', e);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleClearAllConversations = () => {
+    if (conversations.length === 0) return;
+    Alert.alert(
+      'Bersihkan Semua Percakapan?',
+      'Semua daftar chat dan riwayat obrolan Anda akan dihapus secara permanen.',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Bersihkan Semua',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              for (const c of conversations) {
+                await AsyncStorage.removeItem(`@fp_chat_${c.recipientId}`);
+              }
+              await AsyncStorage.removeItem('@fp_active_conversations');
+              setConversations([]);
+            } catch (e) {
+              console.log('Error clearing all conversations:', e);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const onRefresh = () => {
@@ -103,13 +133,24 @@ export default function ConversationsScreen() {
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>CHAT TEMAN ATLET</Text>
-        <TouchableOpacity 
-          style={styles.newChatBtn}
-          onPress={() => navigation.navigate('InviteFriends')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="create-outline" size={22} color="#D7FF00" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {conversations.length > 0 && (
+            <TouchableOpacity 
+              style={styles.clearAllBtn}
+              onPress={handleClearAllConversations}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={18} color="#FF453A" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={styles.newChatBtn}
+            onPress={() => navigation.navigate('InviteFriends')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="create-outline" size={22} color="#D7FF00" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* SEARCH BAR */}
@@ -166,49 +207,59 @@ export default function ConversationsScreen() {
           renderItem={({ item }) => {
             const isPing = item.lastMessage.includes('P I N G');
             return (
-              <TouchableOpacity 
-                style={styles.convCard}
-                onPress={() => {
-                  navigation.navigate('Chat', {
-                    recipientId: item.recipientId,
-                    recipientName: item.recipientName,
-                    recipientAvatar: item.recipientAvatar,
-                    isVip: item.isVip,
-                  });
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.avatarWrap, item.isVip && styles.avatarWrapVip]}>
-                  <Image source={{ uri: item.recipientAvatar }} style={styles.avatar} />
-                  <View style={styles.onlineDot} />
-                </View>
+              <View style={styles.convCardWrapper}>
+                <TouchableOpacity 
+                  style={styles.convCard}
+                  onPress={() => {
+                    navigation.navigate('Chat', {
+                      recipientId: item.recipientId,
+                      recipientName: item.recipientName,
+                      recipientAvatar: item.recipientAvatar,
+                      isVip: item.isVip,
+                    });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.avatarWrap, item.isVip && styles.avatarWrapVip]}>
+                    <Image source={{ uri: item.recipientAvatar }} style={styles.avatar} />
+                    <View style={styles.onlineDot} />
+                  </View>
 
-                <View style={styles.convInfo}>
-                  <View style={styles.convTopRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={styles.convName}>{item.recipientName}</Text>
-                      {item.isVip && (
-                        <View style={styles.vipBadge}>
-                          <Text style={styles.vipBadgeText}>VIP</Text>
-                        </View>
-                      )}
+                  <View style={styles.convInfo}>
+                    <View style={styles.convTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.convName}>{item.recipientName}</Text>
+                        {item.isVip && (
+                          <View style={styles.vipBadge}>
+                            <Text style={styles.vipBadgeText}>VIP</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.timestampText}>{formatTime(item.timestamp)}</Text>
                     </View>
-                    <Text style={styles.timestampText}>{formatTime(item.timestamp)}</Text>
-                  </View>
 
-                  <View style={styles.convPinRow}>
-                    <Ionicons name="keypad" size={10} color="#FFD700" style={{ marginRight: 3 }} />
-                    <Text style={styles.convPinText}>PIN: {item.pin}</Text>
-                  </View>
+                    <View style={styles.convPinRow}>
+                      <Ionicons name="keypad" size={10} color="#FFD700" style={{ marginRight: 3 }} />
+                      <Text style={styles.convPinText}>PIN: {item.pin}</Text>
+                    </View>
 
-                  <Text 
-                    style={[styles.lastMessageText, isPing && styles.lastMessagePing]} 
-                    numberOfLines={1}
-                  >
-                    {item.lastMessage}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                    <Text 
+                      style={[styles.lastMessageText, isPing && styles.lastMessagePing]} 
+                      numberOfLines={1}
+                    >
+                      {item.lastMessage}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.deleteConvBtn}
+                  onPress={() => handleDeleteConversation(item)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#71717A" />
+                </TouchableOpacity>
+              </View>
             );
           }}
         />
@@ -252,6 +303,10 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
+  clearAllBtn: {
+    padding: 6,
+    marginRight: 4,
+  },
   newChatBtn: {
     padding: 6,
   },
@@ -280,13 +335,24 @@ const styles = StyleSheet.create({
   listContent: {
     paddingVertical: 8,
   },
-  convCard: {
+  convCardWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingRight: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  convCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    paddingVertical: 14,
+  },
+  deleteConvBtn: {
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarWrap: {
     position: 'relative',

@@ -83,17 +83,6 @@ export default function ChatScreen() {
 
       if (savedMessagesJson) {
         loadedMessages = JSON.parse(savedMessagesJson);
-      } else {
-        // Pesan sambutan awal otomatis
-        loadedMessages = [
-          {
-            id: 'init-1',
-            senderId: recipientId || 'other',
-            recipientId: myId,
-            text: `Halo! Salam kenal, mari pacu target pace bareng di Flex Pace! 🏃⚡`,
-            created_at: new Date(Date.now() - 3600000).toISOString(),
-          }
-        ];
       }
 
       // Jika ada kartu kontak atlet yang dioper untuk dikirimkan (BBM Style)
@@ -107,16 +96,75 @@ export default function ChatScreen() {
           created_at: new Date().toISOString(),
         };
         loadedMessages.push(promoMsg);
+        await AsyncStorage.setItem(chatStorageKey, JSON.stringify(loadedMessages));
       }
 
       setMessages(loadedMessages);
-      await AsyncStorage.setItem(chatStorageKey, JSON.stringify(loadedMessages));
 
-      // Catat juga ke percakapan aktif
-      await saveConversationEntry(myId, loadedMessages[loadedMessages.length - 1]);
+      // Catat ke percakapan aktif jika ada pesan
+      if (loadedMessages.length > 0) {
+        await saveConversationEntry(myId, loadedMessages[loadedMessages.length - 1]);
+      }
     } catch (e) {
       console.log('Error init chat:', e);
     }
+  };
+
+  const handleClearChatHistory = () => {
+    Alert.alert(
+      'Hapus Riwayat Chat?',
+      `Apakah Anda yakin ingin menghapus seluruh pesan percakapan dengan ${recipientName || 'atlet ini'}?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus Semua',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setMessages([]);
+              await AsyncStorage.removeItem(chatStorageKey);
+              // Hapus juga entri dari daftar percakapan aktif
+              const convKey = '@fp_active_conversations';
+              const convJson = await AsyncStorage.getItem(convKey);
+              if (convJson) {
+                const convs: any[] = JSON.parse(convJson);
+                const updated = convs.filter(c => c.recipientId !== recipientId);
+                await AsyncStorage.setItem(convKey, JSON.stringify(updated));
+              }
+              Alert.alert('Sukses', 'Riwayat chat telah dibersihkan.');
+            } catch (e) {
+              console.log('Error clearing chat history:', e);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDeleteSingleMessage = (msg: ChatMessage) => {
+    Alert.alert(
+      'Hapus Pesan?',
+      'Apakah Anda ingin menghapus pesan ini?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const updated = messages.filter(m => m.id !== msg.id);
+              setMessages(updated);
+              await AsyncStorage.setItem(chatStorageKey, JSON.stringify(updated));
+              if (updated.length > 0) {
+                await saveConversationEntry(currentUserId, updated[updated.length - 1]);
+              }
+            } catch (e) {
+              console.log('Error deleting message:', e);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const saveConversationEntry = async (myId: string, lastMsg: ChatMessage) => {
@@ -175,45 +223,6 @@ export default function ChatScreen() {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
-
-    // Simulasi balasan cerdas atlet jika PING atau pertanyaan
-    simulateAthleteReply(newMsg);
-  };
-
-  const simulateAthleteReply = (lastUserMsg: ChatMessage) => {
-    setIsTyping(true);
-    setTimeout(async () => {
-      setIsTyping(false);
-      let replyText = 'Siap! Mau jadwalkan lari bareng kapan nih? 🏃';
-
-      if (lastUserMsg.isPing) {
-        replyText = '⚡ PING juga bro! Ada info rute atau event Fun Run baru?';
-        triggerPingBuzz();
-      } else if (lastUserMsg.text.toLowerCase().includes('pace')) {
-        replyText = 'Target pace saya besok pagi kisaran 05:15 /km jarak 10K. Ayo gabung!';
-      } else if (lastUserMsg.promoCard) {
-        replyText = `Wah mantap, terima kasih rekomendasinya! Langsung saya invite PIN atlet ${lastUserMsg.promoCard.name} 👍`;
-      }
-
-      const replyMsg: ChatMessage = {
-        id: `reply-${Date.now()}`,
-        senderId: recipientId || 'other',
-        recipientId: currentUserId,
-        text: replyText,
-        created_at: new Date().toISOString(),
-      };
-
-      setMessages(prev => {
-        const next = [...prev, replyMsg];
-        AsyncStorage.setItem(chatStorageKey, JSON.stringify(next));
-        saveConversationEntry(currentUserId, replyMsg);
-        return next;
-      });
-
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }, 1600);
   };
 
   const sendBbmPing = () => {
@@ -269,19 +278,31 @@ export default function ChatScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.viewProfileBtn}
-          onPress={() => {
-            navigation.navigate('UserProfile', {
-              userId: recipientId,
-              userName: recipientName,
-              userAvatar: recipientAvatar,
-            });
-          }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="person-circle-outline" size={26} color="#D7FF00" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {messages.length > 0 && (
+            <TouchableOpacity 
+              style={styles.clearChatBtn}
+              onPress={handleClearChatHistory}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FF453A" />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity 
+            style={styles.viewProfileBtn}
+            onPress={() => {
+              navigation.navigate('UserProfile', {
+                userId: recipientId,
+                userName: recipientName,
+                userAvatar: recipientAvatar,
+              });
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-circle-outline" size={26} color="#D7FF00" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* QUICK GREETING CHIPS */}
@@ -312,13 +333,28 @@ export default function ChatScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyChatBox}>
+            <View style={styles.emptyChatIconCircle}>
+              <Ionicons name="chatbubbles-outline" size={40} color="#3F3F46" />
+            </View>
+            <Text style={styles.emptyChatTitle}>Mulai Percakapan</Text>
+            <Text style={styles.emptyChatSub}>
+              Kirim sapaan pertama atau tekan tombol PING! untuk menyapa {recipientName || 'rekan atlet ini'}.
+            </Text>
+          </View>
+        }
         renderItem={({ item }) => {
           const isMine = item.senderId === currentUserId;
 
           // 1. Render Pesan PING!!! BBM
           if (item.isPing) {
             return (
-              <View style={[styles.pingContainer, isMine ? styles.pingRight : styles.pingLeft]}>
+              <TouchableOpacity 
+                activeOpacity={0.9} 
+                onLongPress={() => handleDeleteSingleMessage(item)}
+                style={[styles.pingContainer, isMine ? styles.pingRight : styles.pingLeft]}
+              >
                 <View style={[styles.pingBubble, isMine ? styles.pingBubbleMine : styles.pingBubbleOther]}>
                   <Ionicons name="flash" size={16} color={isMine ? "#000000" : "#FFD700"} style={{ marginRight: 6 }} />
                   <Text style={[styles.pingText, isMine ? styles.pingTextMine : styles.pingTextOther]}>
@@ -326,7 +362,7 @@ export default function ChatScreen() {
                   </Text>
                 </View>
                 <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
-              </View>
+              </TouchableOpacity>
             );
           }
 
@@ -334,7 +370,11 @@ export default function ChatScreen() {
           if (item.promoCard) {
             const card = item.promoCard;
             return (
-              <View style={[styles.msgWrapper, isMine ? styles.msgRight : styles.msgLeft]}>
+              <TouchableOpacity 
+                activeOpacity={0.95}
+                onLongPress={() => handleDeleteSingleMessage(item)}
+                style={[styles.msgWrapper, isMine ? styles.msgRight : styles.msgLeft]}
+              >
                 <View style={[styles.cardBubble, isMine ? styles.cardBubbleMine : styles.cardBubbleOther]}>
                   <View style={styles.cardBubbleHeader}>
                     <Ionicons name="megaphone" size={13} color="#FFD700" style={{ marginRight: 4 }} />
@@ -368,20 +408,24 @@ export default function ChatScreen() {
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
-              </View>
+              </TouchableOpacity>
             );
           }
 
           // 3. Render Pesan Teks Standar
           return (
-            <View style={[styles.msgWrapper, isMine ? styles.msgRight : styles.msgLeft]}>
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onLongPress={() => handleDeleteSingleMessage(item)}
+              style={[styles.msgWrapper, isMine ? styles.msgRight : styles.msgLeft]}
+            >
               <View style={[styles.msgBubble, isMine ? styles.msgBubbleMine : styles.msgBubbleOther]}>
                 <Text style={[styles.msgText, isMine ? styles.msgTextMine : styles.msgTextOther]}>
                   {item.text}
                 </Text>
               </View>
               <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
-            </View>
+            </TouchableOpacity>
           );
         }}
       />
@@ -752,5 +796,39 @@ const styles = StyleSheet.create({
   sendBtnDisabled: {
     backgroundColor: '#3F3F46',
     opacity: 0.5,
-  }
+  },
+  clearChatBtn: {
+    padding: 6,
+    marginRight: 2,
+  },
+  emptyChatBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 30,
+  },
+  emptyChatIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#16161D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  emptyChatTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptyChatSub: {
+    color: '#71717A',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
 });

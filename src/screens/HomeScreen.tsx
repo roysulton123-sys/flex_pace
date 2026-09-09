@@ -18,6 +18,7 @@ import PostCard, { PostData } from '../components/PostCard';
 import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -35,126 +36,6 @@ interface AthleteStory {
   timeAgo: string;
 }
 
-const ATHLETE_STORIES: AthleteStory[] = [
-  {
-    id: 'story_1',
-    name: 'Dimas Pace',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80',
-    photo: 'https://images.unsplash.com/photo-1552674605-15c2198ea1b2?w=900&q=80',
-    pace: "04'38\"/km",
-    distance: "7.52 KM",
-    time: "34:50",
-    bpm: "158",
-    ringColor: '#D7FF00',
-    badge: '7.5K',
-    timeAgo: '1j lalu'
-  },
-  {
-    id: 'story_2',
-    name: 'Siti Runner',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80',
-    photo: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=900&q=80',
-    pace: "05'12\"/km",
-    distance: "10.02 KM",
-    time: "52:10",
-    bpm: "164",
-    ringColor: '#00F0FF',
-    badge: '10K',
-    timeAgo: '2j lalu'
-  },
-  {
-    id: 'story_3',
-    name: 'Gowes ID',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
-    photo: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=900&q=80',
-    pace: "28.4 km/h",
-    distance: "32.40 KM",
-    time: "1:08:24",
-    bpm: "142",
-    ringColor: '#FF007F',
-    badge: 'GOWES',
-    timeAgo: '3j lalu'
-  },
-  {
-    id: 'story_4',
-    name: 'Budi Trail',
-    avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200&q=80',
-    photo: 'https://images.unsplash.com/photo-1486218119243-13883505764c?w=900&q=80',
-    pace: "06'40\"/km",
-    distance: "12.80 KM",
-    time: "1:25:18",
-    bpm: "172",
-    ringColor: '#D7FF00',
-    badge: 'TRAIL',
-    timeAgo: '4j lalu'
-  },
-  {
-    id: 'story_5',
-    name: 'Citra Half',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
-    photo: 'https://images.unsplash.com/photo-1513593771513-7b58b6c4af38?w=900&q=80',
-    pace: "04'55\"/km",
-    distance: "21.10 KM",
-    time: "1:43:52",
-    bpm: "168",
-    ringColor: '#A855F7',
-    badge: '21K PB',
-    timeAgo: '5j lalu'
-  }
-];
-
-// Data starter jika database belum terisi postingan
-const STARTER_POSTS: PostData[] = [
-  {
-    id: 'starter_post_1',
-    user_id: 'user_star_1',
-    image_url: 'https://images.unsplash.com/photo-1552674605-15c2198ea1b2?w=900&q=80',
-    caption: 'Lari pagi mengitari GBK Senayan! Cuaca sangat sejuk dan target pace 04\'45" tembus hari ini 🔥 Siap gas Fun Run minggu depan!',
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-    telemetry: "5.40 KM • PACE 04'45\" • 25:39",
-    sport_type: '🏃 Fun Run 5K',
-    profiles: {
-      name: 'Roy Pratama',
-      avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
-      role: 'organizer'
-    },
-    likes: [{ user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u3' }],
-    comments: [
-      { id: 'c1', user_id: 'u2', content: 'Gacor banget pacenya bang! 🔥', created_at: new Date().toISOString() }
-    ]
-  },
-  {
-    id: 'starter_post_2',
-    user_id: 'user_star_2',
-    image_url: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=900&q=80',
-    caption: 'Gowes bareng peleton santai rute Dago - Lembang. Tanjakannya lumayan bikin betis terbakar tapi pemandangannya juara! 🚴💨',
-    created_at: new Date(Date.now() - 7200000).toISOString(),
-    telemetry: '38.20 KM • 26.5 KM/H • +450m',
-    sport_type: '🚴 Gowes Santai',
-    profiles: {
-      name: 'Sarah Cycling Club',
-      avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80'
-    },
-    likes: [{ user_id: 'u1' }, { user_id: 'u4' }],
-    comments: []
-  },
-  {
-    id: 'starter_post_3',
-    user_id: 'user_star_3',
-    image_url: 'https://images.unsplash.com/photo-1486218119243-13883505764c?w=900&q=80',
-    caption: 'Trail run jalur Gunung Gede Pangrango. Udara segar, lintasan berbatu menantang, sepatu penuh lumpur tapi kepuasan 100% 🌲🏃‍♂️',
-    created_at: new Date(Date.now() - 14400000).toISOString(),
-    telemetry: '14.50 KM • PACE 06\'15" • +890m',
-    sport_type: '🌲 Trail Run',
-    profiles: {
-      name: 'Rendi Mountain Runner',
-      avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80'
-    },
-    likes: [{ user_id: 'u2' }],
-    comments: []
-  }
-];
-
 export default function HomeScreen() {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<'social' | 'sports'>('social');
@@ -162,6 +43,8 @@ export default function HomeScreen() {
   
   const [activities, setActivities] = useState<ActivityData[]>([]);
   const [posts, setPosts] = useState<PostData[]>([]);
+  const [stories, setStories] = useState<AthleteStory[]>([]);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
   
   const [loading, setLoading] = useState(true);
@@ -176,6 +59,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchCurrentUser();
+    loadStories();
   }, []);
 
   useEffect(() => {
@@ -183,9 +67,34 @@ export default function HomeScreen() {
   }, [activeTab]);
 
   const fetchCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setCurrentUserId(user.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('name, avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (prof) {
+          setUserProfile(prof);
+        }
+      }
+    } catch (e) {
+      console.log('Error fetching current user:', e);
+    }
+  };
+
+  const loadStories = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('@fp_user_stories');
+      if (saved) {
+        setStories(JSON.parse(saved));
+      } else {
+        setStories([]);
+      }
+    } catch (e) {
+      setStories([]);
     }
   };
 
@@ -201,6 +110,7 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await loadStories();
     if (activeTab === 'social') {
       await fetchPosts();
     } else {
@@ -219,9 +129,13 @@ export default function HomeScreen() {
           image_url,
           caption,
           created_at,
+          telemetry,
+          sport_type,
           profiles (
             name,
-            avatar_url
+            avatar_url,
+            role,
+            is_premium
           ),
           likes (
             user_id
@@ -234,20 +148,13 @@ export default function HomeScreen() {
 
       if (error) {
         console.error('Error fetching posts:', error.message);
-        setPosts(STARTER_POSTS);
+        setPosts([]);
       } else {
-        const dbPosts = (data as any[]) || [];
-        if (dbPosts.length === 0) {
-          setPosts(STARTER_POSTS);
-        } else {
-          // Gabungkan postingan user dari DB dengan showcase jika jumlahnya masih sedikit
-          const combined = [...dbPosts, ...STARTER_POSTS.filter(sp => !dbPosts.some(p => p.id === sp.id))];
-          setPosts(combined);
-        }
+        setPosts((data as any[]) || []);
       }
     } catch (err) {
       console.error(err);
-      setPosts(STARTER_POSTS);
+      setPosts([]);
     }
   };
 
@@ -300,7 +207,7 @@ export default function HomeScreen() {
         >
           <View style={styles.myStoryRing}>
             <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80' }} 
+              source={{ uri: userProfile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80' }} 
               style={styles.storyAvatar} 
             />
             <View style={styles.myStoryAddBadge}>
@@ -310,23 +217,34 @@ export default function HomeScreen() {
           <Text style={styles.storyName} numberOfLines={1}>Cerita Anda</Text>
         </TouchableOpacity>
 
-        {/* Story Atlet Komunitas */}
-        {ATHLETE_STORIES.map((story) => (
+        {/* Story Riil Pengguna */}
+        {stories.map((story) => (
           <TouchableOpacity 
             key={story.id} 
             style={styles.storyItem} 
             activeOpacity={0.8}
             onPress={() => handleOpenStory(story)}
           >
-            <View style={[styles.athleteStoryRing, { borderColor: story.ringColor }]}>
+            <View style={[styles.athleteStoryRing, { borderColor: story.ringColor || '#D7FF00' }]}>
               <Image source={{ uri: story.avatar }} style={styles.storyAvatar} />
-              <View style={[styles.storyPaceBadge, { backgroundColor: story.ringColor }]}>
-                <Text style={styles.storyPaceBadgeText}>{story.badge}</Text>
+              <View style={[styles.storyPaceBadge, { backgroundColor: story.ringColor || '#D7FF00' }]}>
+                <Text style={styles.storyPaceBadgeText}>{story.badge || 'PACE'}</Text>
               </View>
             </View>
             <Text style={styles.storyName} numberOfLines={1}>{story.name}</Text>
           </TouchableOpacity>
         ))}
+
+        {stories.length === 0 && (
+          <TouchableOpacity 
+            style={styles.emptyStoryHint}
+            onPress={() => setAddStoryModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="camera-outline" size={14} color="#A1A1AA" style={{ marginRight: 6 }} />
+            <Text style={styles.emptyStoryHintText}>Buat Story Pace</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* View Mode Switcher for Social Tab */}
@@ -397,6 +315,26 @@ export default function HomeScreen() {
     );
   };
 
+  const renderEmptyFeed = () => (
+    <View style={styles.emptyFeedBox}>
+      <View style={styles.emptyFeedIconCircle}>
+        <Ionicons name="images-outline" size={38} color="#71717A" />
+      </View>
+      <Text style={styles.emptyFeedTitle}>Belum Ada Postingan Atlet</Text>
+      <Text style={styles.emptyFeedDesc}>
+        Feed masih bersih. Jadilah yang pertama membagikan foto lari, pacemu, atau rute olahraga ke feed Flex Pace!
+      </Text>
+      <TouchableOpacity 
+        style={styles.emptyFeedBtn}
+        onPress={() => (navigation as any).navigate('CreatePost')}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="add-circle" size={18} color="#000000" style={{ marginRight: 6 }} />
+        <Text style={styles.emptyFeedBtnText}>Bagikan Postingan Sekarang</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderContent = () => {
     if (loading) {
       return (
@@ -415,6 +353,7 @@ export default function HomeScreen() {
             numColumns={2}
             keyExtractor={(item) => item.id}
             ListHeaderComponent={renderStoryBar}
+            ListEmptyComponent={renderEmptyFeed}
             renderItem={renderMosaicItem}
             columnWrapperStyle={styles.mosaicRow}
             contentContainerStyle={styles.listContainer}
@@ -431,6 +370,7 @@ export default function HomeScreen() {
           key="feed-single"
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderStoryBar}
+          ListEmptyComponent={renderEmptyFeed}
           renderItem={({ item }) => (
             <PostCard 
               post={item} 
@@ -1149,5 +1089,70 @@ const styles = StyleSheet.create({
   },
   reactionBtn: {
     padding: 4,
-  }
+  },
+  emptyStoryHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16161D',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    borderStyle: 'dashed',
+  },
+  emptyStoryHintText: {
+    color: '#A1A1AA',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyFeedBox: {
+    backgroundColor: '#121216',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    marginVertical: 30,
+    borderWidth: 1,
+    borderColor: '#1E1E26',
+  },
+  emptyFeedIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#1C1C24',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  emptyFeedTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyFeedDesc: {
+    color: '#A1A1AA',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 10,
+  },
+  emptyFeedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D7FF00',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  emptyFeedBtnText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '800',
+  },
 });
