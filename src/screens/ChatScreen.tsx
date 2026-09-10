@@ -27,12 +27,51 @@ interface PromoCardData {
   isVip?: boolean;
 }
 
+export interface ChatSticker {
+  id: string;
+  emoji: string;
+  title: string;
+  category: 'lari' | 'sepeda' | 'motivasi' | 'fun';
+  color: string;
+  badgeBg: string;
+}
+
+export const ATHLETIC_STICKERS: Record<'lari' | 'sepeda' | 'motivasi' | 'fun', ChatSticker[]> = {
+  lari: [
+    { id: 'stk_sub4', emoji: '⚡', title: 'Sub-4 Pace!', category: 'lari', color: '#D7FF00', badgeBg: 'rgba(215, 255, 0, 0.18)' },
+    { id: 'stk_easy', emoji: '👟', title: 'Easy Recovery Run', category: 'lari', color: '#60A5FA', badgeBg: 'rgba(96, 165, 250, 0.18)' },
+    { id: 'stk_long', emoji: '🏃', title: 'Sunday Long Run', category: 'lari', color: '#F43F5E', badgeBg: 'rgba(244, 63, 94, 0.18)' },
+    { id: 'stk_marathon', emoji: '🏅', title: 'Road to Marathon', category: 'lari', color: '#F59E0B', badgeBg: 'rgba(245, 158, 11, 0.18)' },
+    { id: 'stk_gass', emoji: '🔥', title: 'Gass Tipis-Tipis!', category: 'lari', color: '#EF4444', badgeBg: 'rgba(239, 68, 68, 0.18)' },
+    { id: 'stk_morning', emoji: '🌅', title: 'Morning Miles', category: 'lari', color: '#FBBF24', badgeBg: 'rgba(251, 191, 36, 0.18)' },
+  ],
+  sepeda: [
+    { id: 'stk_gowes', emoji: '🚴', title: 'Gowes Pagi Seru', category: 'sepeda', color: '#10B981', badgeBg: 'rgba(16, 185, 129, 0.18)' },
+    { id: 'stk_kom', emoji: '👑', title: 'King of Mountain', category: 'sepeda', color: '#FFD700', badgeBg: 'rgba(255, 215, 0, 0.18)' },
+    { id: 'stk_peloton', emoji: '🚴‍♂️', title: 'Tarik Peloton!', category: 'sepeda', color: '#38BDF8', badgeBg: 'rgba(56, 189, 248, 0.18)' },
+    { id: 'stk_pitstop', emoji: '☕', title: 'Pitstop Kopi Dulu', category: 'sepeda', color: '#F59E0B', badgeBg: 'rgba(245, 158, 11, 0.18)' },
+  ],
+  motivasi: [
+    { id: 'stk_pb', emoji: '🚀', title: 'New Personal Best!', category: 'motivasi', color: '#D7FF00', badgeBg: 'rgba(215, 255, 0, 0.18)' },
+    { id: 'stk_beast', emoji: '💪', title: 'No Excuses Today', category: 'motivasi', color: '#A855F7', badgeBg: 'rgba(168, 85, 247, 0.18)' },
+    { id: 'stk_fire', emoji: '🦁', title: 'Beast Mode On', category: 'motivasi', color: '#F97316', badgeBg: 'rgba(249, 115, 22, 0.18)' },
+    { id: 'stk_target', emoji: '🎯', title: 'Target Tercapai!', category: 'motivasi', color: '#34D399', badgeBg: 'rgba(52, 211, 153, 0.18)' },
+  ],
+  fun: [
+    { id: 'stk_ayolari', emoji: '👀', title: 'Kuy Lari Bareng?', category: 'fun', color: '#38BDF8', badgeBg: 'rgba(56, 189, 248, 0.18)' },
+    { id: 'stk_rehat', emoji: '🛋️', title: 'Rehat Dulu Sob', category: 'fun', color: '#9CA3AF', badgeBg: 'rgba(156, 163, 175, 0.18)' },
+    { id: 'stk_carbo', emoji: '🍕', title: 'Carbo Loading!', category: 'fun', color: '#FBBF24', badgeBg: 'rgba(251, 191, 36, 0.18)' },
+    { id: 'stk_respect', emoji: '👏', title: 'Respect Pace-mu!', category: 'fun', color: '#34D399', badgeBg: 'rgba(52, 211, 153, 0.18)' },
+  ]
+};
+
 interface ChatMessage {
   id: string;
   senderId: string;
   recipientId: string;
   text: string;
   isPing?: boolean;
+  sticker?: ChatSticker;
   promoCard?: PromoCardData;
   created_at: string;
 }
@@ -53,6 +92,10 @@ export default function ChatScreen() {
 
   // 3-Dots Menu Modal State
   const [menuModalVisible, setMenuModalVisible] = useState(false);
+
+  // Sticker Picker Modal State
+  const [stickerModalVisible, setStickerModalVisible] = useState(false);
+  const [selectedStickerTab, setSelectedStickerTab] = useState<'lari' | 'sepeda' | 'motivasi' | 'fun'>('lari');
 
   // BBM PING Screen Buzz Shake Animation
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -304,7 +347,11 @@ export default function ChatScreen() {
         recipientName: recipientName || 'Flex Athlete',
         recipientAvatar: recipientAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
         isVip: !!isVip,
-        lastMessage: lastMsg.isPing ? '⚡ * P I N G ! ! ! *' : lastMsg.text,
+        lastMessage: lastMsg.isPing 
+          ? '⚡ * P I N G ! ! ! *' 
+          : lastMsg.sticker 
+            ? `${lastMsg.sticker.emoji} ${lastMsg.sticker.title}` 
+            : lastMsg.text,
         timestamp: lastMsg.created_at,
         pin: recipientPin,
       };
@@ -352,6 +399,28 @@ export default function ChatScreen() {
 
   const sendBbmPing = () => {
     sendMessage(undefined, true);
+  };
+
+  const sendSticker = async (sticker: ChatSticker) => {
+    setStickerModalVisible(false);
+    const newMsg: ChatMessage = {
+      id: `stk-${Date.now()}`,
+      senderId: currentUserId,
+      recipientId: recipientId || 'other',
+      text: `[Stiker] ${sticker.title}`,
+      sticker: sticker,
+      created_at: new Date().toISOString(),
+    };
+
+    const updated = [...messages, newMsg];
+    setMessages(updated);
+
+    await AsyncStorage.setItem(chatStorageKey, JSON.stringify(updated));
+    await saveConversationEntry(currentUserId, newMsg);
+
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
   const formatMessageTime = (isoString: string) => {
@@ -601,7 +670,49 @@ export default function ChatScreen() {
             );
           }
 
-          // 3. Render Pesan Teks Standar
+          // 3. Render Pesan Stiker Atletik
+          if (item.sticker) {
+            const stk = item.sticker;
+            return (
+              <TouchableOpacity 
+                activeOpacity={0.9}
+                onPress={() => handleMessagePress(item)}
+                onLongPress={() => handleMessageLongPress(item)}
+                style={[
+                  styles.stickerRowWrapper,
+                  isSelected && styles.selectedRowWrapper,
+                  isMine ? styles.msgRight : styles.msgLeft
+                ]}
+              >
+                {isSelectionMode && (
+                  <View style={styles.selectionCheckCircle}>
+                    <Ionicons 
+                      name={isSelected ? "checkbox" : "square-outline"} 
+                      size={20} 
+                      color={isSelected ? "#D7FF00" : "#71717A"} 
+                    />
+                  </View>
+                )}
+                <View style={styles.msgWrapper}>
+                  <View style={[
+                    styles.stickerBubble, 
+                    isMine ? styles.stickerBubbleMine : styles.stickerBubbleOther,
+                    isSelected && styles.stickerBubbleSelected
+                  ]}>
+                    <View style={[styles.stickerEmojiContainer, { backgroundColor: stk.badgeBg || 'rgba(215, 255, 0, 0.15)' }]}>
+                      <Text style={styles.stickerEmojiText}>{stk.emoji}</Text>
+                    </View>
+                    <Text style={[styles.stickerTitleText, { color: stk.color || '#FFFFFF' }]}>
+                      {stk.title}
+                    </Text>
+                  </View>
+                  <Text style={styles.messageTimestamp}>{formatMessageTime(item.created_at)}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }
+
+          // 4. Render Pesan Teks Standar
           return (
             <TouchableOpacity 
               activeOpacity={0.9}
@@ -646,20 +757,28 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* BILAH INPUT PESAN & TOMBOL PING BBM */}
+      {/* BILAH INPUT PESAN & TOMBOL PING BBM & STIKER */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.inputContainer}>
-          {/* TOMBOL PING!!! BBM */}
+          {/* TOMBOL PING!!! BBM (MINIMALIS & KOMPAK) */}
           <TouchableOpacity 
             style={styles.pingActionBtn}
             onPress={sendBbmPing}
             activeOpacity={0.8}
           >
-            <Ionicons name="flash" size={15} color="#000000" />
-            <Text style={styles.pingActionBtnText}>PING!</Text>
+            <Ionicons name="flash" size={16} color="#000000" />
+          </TouchableOpacity>
+
+          {/* TOMBOL STIKER CHAT ATLETIK */}
+          <TouchableOpacity 
+            style={styles.stickerPickerBtn}
+            onPress={() => setStickerModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="happy" size={18} color="#D7FF00" />
           </TouchableOpacity>
 
           <TextInput
@@ -780,6 +899,87 @@ export default function ChatScreen() {
               <Text style={styles.menuCloseBtnText}>Tutup</Text>
             </TouchableOpacity>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* MODAL STIKER ATLETIK FLEX PACE */}
+      <Modal
+        visible={stickerModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setStickerModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setStickerModalVisible(false)}
+        >
+          <TouchableOpacity 
+            activeOpacity={1} 
+            style={styles.stickerSheetCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* STICKER SHEET HEADER */}
+            <View style={styles.stickerSheetHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="sparkles" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
+                <Text style={styles.stickerSheetTitle}>STIKER ATLETIK FLEX PACE</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setStickerModalVisible(false)}
+                style={styles.stickerCloseBtn}
+              >
+                <Ionicons name="close" size={20} color="#A1A1AA" />
+              </TouchableOpacity>
+            </View>
+
+            {/* CATEGORY TABS */}
+            <View style={styles.stickerCategoryTabs}>
+              {(['lari', 'sepeda', 'motivasi', 'fun'] as const).map((tab) => {
+                const isActive = selectedStickerTab === tab;
+                const tabTitles = {
+                  lari: '🏃 Lari',
+                  sepeda: '🚴 Gowes',
+                  motivasi: '🏆 Motivasi',
+                  fun: '🎉 Fun'
+                };
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.stickerCategoryTab, isActive && styles.stickerCategoryTabActive]}
+                    onPress={() => setSelectedStickerTab(tab)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.stickerCategoryTabText, isActive && styles.stickerCategoryTabTextActive]}>
+                      {tabTitles[tab]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* STICKER GRID */}
+            <ScrollView 
+              contentContainerStyle={styles.stickerGrid} 
+              showsVerticalScrollIndicator={false}
+            >
+              {ATHLETIC_STICKERS[selectedStickerTab].map((sticker) => (
+                <TouchableOpacity
+                  key={sticker.id}
+                  style={styles.stickerTile}
+                  onPress={() => sendSticker(sticker)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.stickerTileEmojiBox, { backgroundColor: sticker.badgeBg }]}>
+                    <Text style={styles.stickerTileEmoji}>{sticker.emoji}</Text>
+                  </View>
+                  <Text style={[styles.stickerTileTitle, { color: sticker.color }]} numberOfLines={2}>
+                    {sticker.title}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </Animated.View>
@@ -1069,19 +1269,24 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
   },
   pingActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FFD700',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
   },
-  pingActionBtnText: {
-    color: '#000000',
-    fontSize: 11,
-    fontWeight: '900',
-    marginLeft: 3,
+  stickerPickerBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1E1E28',
+    borderWidth: 1,
+    borderColor: 'rgba(215, 255, 0, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
   },
   textInput: {
     flex: 1,
@@ -1301,5 +1506,142 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
+  },
+
+  // STIKER ATLETIK CHAT
+  stickerRowWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingHorizontal: 4,
+    borderRadius: 14,
+  },
+  stickerBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    maxWidth: 260,
+  },
+  stickerBubbleMine: {
+    backgroundColor: '#1C1C24',
+    borderColor: '#D7FF00',
+  },
+  stickerBubbleOther: {
+    backgroundColor: '#181820',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  stickerBubbleSelected: {
+    borderWidth: 2,
+    borderColor: '#D7FF00',
+  },
+  stickerEmojiContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  stickerEmojiText: {
+    fontSize: 24,
+  },
+  stickerTitleText: {
+    fontSize: 13,
+    fontWeight: '800',
+    flexShrink: 1,
+  },
+
+  // STIKER BOTTOM SHEET MODAL
+  stickerSheetCard: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#14141B',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(215, 255, 0, 0.3)',
+    maxHeight: 400,
+  },
+  stickerSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  stickerSheetTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  stickerCloseBtn: {
+    padding: 6,
+  },
+  stickerCategoryTabs: {
+    flexDirection: 'row',
+    marginBottom: 14,
+    gap: 6,
+  },
+  stickerCategoryTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#1E1E28',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  stickerCategoryTabActive: {
+    backgroundColor: '#D7FF00',
+    borderColor: '#D7FF00',
+  },
+  stickerCategoryTabText: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  stickerCategoryTabTextActive: {
+    color: '#000000',
+    fontWeight: '900',
+  },
+  stickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingBottom: 10,
+  },
+  stickerTile: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1B1B24',
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  stickerTileEmojiBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  stickerTileEmoji: {
+    fontSize: 18,
+  },
+  stickerTileTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    flex: 1,
   },
 });

@@ -240,15 +240,34 @@ export default function ProfileScreen() {
     loadProfileAndStats();
   };
 
+  const athletePin = profile?.id 
+    ? profile.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()
+    : 'FP2026AT';
+
+  const getProfileSmartLink = () => {
+    const id = profile?.id || 'me';
+    return `https://flex-pace-landing-771657.hostingersite.com/?profile=${id}&pin=${athletePin}`;
+  };
+
   const handleShareProfile = async () => {
     try {
-      const displayName = profile?.name || 'Atlet Flex Pace';
+      const name = profile?.name || displayName || 'Atlet Flex Pace';
+      const smartLink = getProfileSmartLink();
       await Share.share({
-        message: `Ikuti aktivitas olahraga saya di Flex Pace! Profil: ${displayName}`,
+        title: `Profil Atlet Flex Pace - ${name}`,
+        message: `⚡ Ikuti profil olahraga saya di Flex Pace!\n\n👤 Nama: *${name}*\n🔑 PIN Atlet: *${athletePin}*\n\n📲 Buka Profil Saya:\n${smartLink}\n\n(Jika sudah memasang aplikasi Flex Pace, tautan akan langsung membuka profil saya di aplikasi. Jika belum, Anda diarahkan untuk mengunduh aplikasinya!)`,
       });
     } catch (error) {
       console.log('Error sharing profile:', error);
     }
+  };
+
+  const handleCopyProfileLink = () => {
+    const smartLink = getProfileSmartLink();
+    Alert.alert(
+      'Tautan Profil Tersalin!',
+      `Tautan pintar profil Anda berhasil disalin:\n\n${smartLink}\n\nPenerima yang sudah memiliki aplikasi Flex Pace akan langsung diarahkan ke profil Anda. Jika belum punya, mereka akan diarahkan untuk mengunduh aplikasi terlebih dahulu.`
+    );
   };
 
   const handleLogout = () => {
@@ -394,6 +413,33 @@ export default function ProfileScreen() {
           >
             <Ionicons name="log-out-outline" size={18} color="#FF453A" />
           </TouchableOpacity>
+        </View>
+
+        {/* SMART PROFILE SHARE BUTTON CARD */}
+        <View style={styles.profileShareCard}>
+          <View style={styles.profileShareHeader}>
+            <Ionicons name="link" size={13} color="#D7FF00" style={{ marginRight: 6 }} />
+            <Text style={styles.profileShareLabel}>TAUTAN PINTAR PROFIL (AUTO-DETECT APLIKASI / WEB)</Text>
+          </View>
+          <View style={styles.profileShareButtonsRow}>
+            <TouchableOpacity 
+              style={styles.shareProfilePillBtn}
+              onPress={handleShareProfile}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="share-social" size={14} color="#000000" style={{ marginRight: 6 }} />
+              <Text style={styles.shareProfilePillText}>Bagikan Profil Saya</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.copyProfilePillBtn}
+              onPress={handleCopyProfileLink}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="copy-outline" size={14} color="#D7FF00" style={{ marginRight: 6 }} />
+              <Text style={styles.copyProfilePillText}>Salin Tautan</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* BANNER UNDANG TEMAN & ATLET */}
@@ -1873,5 +1919,58 @@ const styles = StyleSheet.create({
     color: '#A1A1AA',
     fontSize: 11,
     lineHeight: 16,
-  }
+  },
+  profileShareCard: {
+    backgroundColor: '#181820',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 255, 0, 0.25)',
+  },
+  profileShareHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  profileShareLabel: {
+    color: '#D7FF00',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  profileShareButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  shareProfilePillBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D7FF00',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  shareProfilePillText: {
+    color: '#000000',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  copyProfilePillBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#202028',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 255, 0, 0.3)',
+  },
+  copyProfilePillText: {
+    color: '#D7FF00',
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });

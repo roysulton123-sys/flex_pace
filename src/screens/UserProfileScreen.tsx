@@ -152,23 +152,39 @@ export default function UserProfileScreen() {
     loadUserProfile();
   };
 
-  // BROADCAST TEKS ALA BLACKBERRY MESSENGER (BBM PIN PROMOTION)
+  // TAUTAN PINTAR & BROADCAST TEKS ALA BLACKBERRY MESSENGER (BBM PIN PROMOTION)
+  const getProfileSmartLink = () => {
+    return `https://flex-pace-landing-771657.hostingersite.com/?profile=${userId}&pin=${athletePin}`;
+  };
+
   const getBbmBroadcastText = () => {
     const name = profile?.name || userName || 'Atlet Flex Pace';
     const statusVip = profile?.is_premium ? '👑 VIP PRO ATHLETE' : '🏃 Atlet Resmi Flex Pace';
     const bioText = profile?.bio ? `"${profile.bio}"` : '"Semangat pacu rekor lari bareng di Flex Pace!"';
+    const smartLink = getProfileSmartLink();
     
     return `📱 *PROMOSI KONTAK ATLET FLEX PACE* ⚡
 ========================================
 👤 *Nama*       : ${name}
-🔑 *PIN BBM*    : [${athletePin}]
+🔑 *PIN Atlet*  : [${athletePin}]
 🏅 *Status*     : ${statusVip}
 🏃‍♂️ *Total Jarak*: ${stats.totalDistanceKm.toFixed(1)} KM • Rekor: ${stats.longestRunKm.toFixed(1)} KM
 💬 *Bio*        : ${bioText}
 
-Ayo invite PIN-nya, tanding pace, & chat bareng di aplikasi Flex Pace!
-📲 Tambahkan Kontak: https://flexpace.my.id/profile?pin=${athletePin}
+Ayo invite PIN-nya, tanding pace, & ikuti profilnya di aplikasi Flex Pace!
+📲 Buka / Ikuti Profil:
+${smartLink}
+
+(Otomatis membuka langsung di aplikasi Flex Pace jika sudah terinstal, atau diarahkan ke website untuk mengunduh aplikasi!)
 ========================================`;
+  };
+
+  const handleCopyProfileSmartLink = () => {
+    const smartLink = getProfileSmartLink();
+    Alert.alert(
+      'Tautan Pintar Tersalin!',
+      `Tautan profil pintar berhasil disalin:\n\n${smartLink}\n\nPenerima yang sudah memiliki aplikasi Flex Pace akan langsung diarahkan ke profil ini. Jika belum punya aplikasi, mereka akan diarahkan ke website resmi untuk mengunduh aplikasinya!`
+    );
   };
 
   const handleShareBbmBroadcast = async () => {
@@ -529,6 +545,15 @@ Ayo invite PIN-nya, tanding pace, & chat bareng di aplikasi Flex Pace!
             >
               <Ionicons name="chatbubble-ellipses" size={18} color="#D7FF00" style={{ marginRight: 8 }} />
               <Text style={styles.bbmChatSendBtnText}>Kirim Kartu Kontak ke Chat Flex Pace</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.bbmCopyLinkBtn}
+              onPress={handleCopyProfileSmartLink}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="link-outline" size={18} color="#A1A1AA" style={{ marginRight: 8 }} />
+              <Text style={styles.bbmCopyLinkBtnText}>Salin Tautan Profil Pintar</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -1085,6 +1110,22 @@ const styles = StyleSheet.create({
     color: '#D7FF00',
     fontSize: 13,
     fontWeight: '800',
+  },
+  bbmCopyLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#16161C',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    paddingVertical: 13,
+    borderRadius: 16,
+    marginBottom: 10,
+  },
+  bbmCopyLinkBtnText: {
+    color: '#E4E4E7',
+    fontSize: 13,
+    fontWeight: '700',
   },
   closeSheetBtn: {
     alignItems: 'center',

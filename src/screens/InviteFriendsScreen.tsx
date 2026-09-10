@@ -27,7 +27,7 @@ interface AthleteProfile {
 }
 
 const STORAGE_KEY_WEB_URL = '@flexpace_download_website_url';
-const DEFAULT_WEB_URL = 'https://flexpace.my.id/download';
+const DEFAULT_WEB_URL = 'https://flex-pace-landing-771657.hostingersite.com';
 
 export default function InviteFriendsScreen() {
   const navigation = useNavigation<any>();
@@ -192,15 +192,32 @@ export default function InviteFriendsScreen() {
                 Bagikan tautan download website resmi Anda ke WhatsApp / medsos. Teman yang membuka akan langsung diarahkan ke halaman unduh APK!
               </Text>
 
-              {/* TAUTAN DOWNLOAD WEBSITE CARD */}
-              <View style={styles.webLinkBox}>
-                <View style={styles.webLinkHeader}>
-                  <Ionicons name="link" size={14} color="#D7FF00" style={{ marginRight: 6 }} />
-                  <Text style={styles.webLinkLabel}>TAUTAN DOWNLOAD WEBSITE ANDA</Text>
+              {/* STATUS WEBSITE RESMI & TOMBOL AKSI CEPAT (BEBAS DARI LINK MENTAH) */}
+              <View style={styles.officialWebsiteCard}>
+                <View style={styles.officialWebsiteBadge}>
+                  <Ionicons name="shield-checkmark" size={14} color="#30D158" style={{ marginRight: 6 }} />
+                  <Text style={styles.officialWebsiteBadgeText}>Website Unduhan Resmi Hostinger Pro Terverifikasi</Text>
                 </View>
-                <Text style={styles.webLinkText} numberOfLines={1}>
-                  {getFullDownloadUrl()}
-                </Text>
+
+                <View style={styles.linkButtonsRow}>
+                  <TouchableOpacity 
+                    style={styles.actionPillBtn} 
+                    onPress={handleCopyLink}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="copy-outline" size={15} color="#000000" style={{ marginRight: 6 }} />
+                    <Text style={styles.actionPillBtnText}>Salin Tautan Unduhan</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.actionPillBtn, styles.actionPillBtnOutline]} 
+                    onPress={handleOpenInBrowser}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="globe-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={[styles.actionPillBtnText, { color: '#FFFFFF' }]}>Kunjungi Website</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* INVITE CODE BOX */}
@@ -447,29 +464,47 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 16,
   },
-  webLinkBox: {
+  officialWebsiteCard: {
     backgroundColor: '#181820',
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(215, 255, 0, 0.2)',
-    marginBottom: 12,
+    borderColor: 'rgba(215, 255, 0, 0.25)',
+    marginBottom: 14,
   },
-  webLinkHeader: {
+  officialWebsiteBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 12,
   },
-  webLinkLabel: {
-    color: '#D7FF00',
-    fontSize: 10,
+  officialWebsiteBadgeText: {
+    color: '#D4D4D8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  linkButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionPillBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D7FF00',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  actionPillBtnOutline: {
+    backgroundColor: '#272732',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  actionPillBtnText: {
+    color: '#000000',
+    fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  webLinkText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
   },
   codeContainer: {
     flexDirection: 'row',
