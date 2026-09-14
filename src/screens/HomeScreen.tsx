@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, 
   FlatList, 
@@ -7,17 +7,17 @@ import {
   Text, 
   ActivityIndicator, 
   TouchableOpacity,
-  Image,
-  ScrollView,
-  Modal,
-  Dimensions,
-  Animated
+  Image, 
+  ScrollView, 
+  Modal, 
+  Dimensions, 
+  Animated 
 } from 'react-native';
 import ActivityCard, { ActivityData } from '../components/ActivityCard';
 import PostCard, { PostData } from '../components/PostCard';
 import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -56,6 +56,18 @@ export default function HomeScreen() {
 
   // Add Story Action Modal State
   const [addStoryModalVisible, setAddStoryModalVisible] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCurrentUser();
+      loadStories();
+      if (activeTab === 'social') {
+        fetchPosts();
+      } else {
+        fetchActivities();
+      }
+    }, [activeTab])
+  );
 
   useEffect(() => {
     fetchCurrentUser();
@@ -121,7 +133,7 @@ export default function HomeScreen() {
 
   const fetchPosts = async () => {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('posts')
         .select(`
           id,
@@ -129,8 +141,6 @@ export default function HomeScreen() {
           image_url,
           caption,
           created_at,
-          telemetry,
-          sport_type,
           profiles (
             name,
             avatar_url,
@@ -147,14 +157,42 @@ export default function HomeScreen() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching posts:', error.message);
-        setPosts([]);
-      } else {
-        setPosts((data as any[]) || []);
+        console.warn('Error fetching posts with relations, trying fallback:', error.message);
+        // Resilient Fallback 1: posts with profiles
+        const fallback1 = await supabase
+          .from('posts')
+          .select(`
+            id,
+            user_id,
+            image_url,
+            caption,
+            created_at,
+            profiles (
+              name,
+              avatar_url,
+              role,
+              is_premium
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (!fallback1.error && fallback1.data) {
+          data = fallback1.data as any[];
+        } else {
+          // Resilient Fallback 2: raw posts
+          const fallback2 = await supabase
+            .from('posts')
+            .select('*')
+            .order('created_at', { ascending: false });
+          data = (fallback2.data as any[]) || [];
+        }
+      }
+
+      if (data) {
+        setPosts(data as any[]);
       }
     } catch (err) {
-      console.error(err);
-      setPosts([]);
+      console.error('Catch error fetching posts:', err);
     }
   };
 

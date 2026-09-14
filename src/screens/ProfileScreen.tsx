@@ -37,6 +37,7 @@ export default function ProfileScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [myPosts, setMyPosts] = useState<any[]>([]);
 
   // Privacy Settings
   const [isPrivateAccount, setIsPrivateAccount] = useState(false);
@@ -219,6 +220,17 @@ export default function ProfileScreen() {
           totalTimeSeconds: totalSec,
           longestRunKm: maxDist / 1000,
         });
+      }
+
+      // 3. Ambil postingan & foto saya
+      const { data: postsData } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (postsData) {
+        setMyPosts(postsData);
       }
     } catch (err) {
       console.log('Error loading profile data:', err);
@@ -709,6 +721,53 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
+      </View>
+
+      {/* POSTINGAN & FOTO SAYA */}
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeaderRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="images" size={14} color="#D7FF00" style={{ marginRight: 6 }} />
+            <Text style={styles.sectionTitle}>POSTINGAN & FOTO SAYA</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.addPostSmallBtn}
+            onPress={() => (navigation as any).navigate('CreatePost')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={14} color="#000000" style={{ marginRight: 2 }} />
+            <Text style={styles.addPostSmallBtnText}>+ Buat Post</Text>
+          </TouchableOpacity>
+        </View>
+
+        {myPosts.length === 0 ? (
+          <View style={styles.emptyPostCard}>
+            <Ionicons name="camera-outline" size={32} color="#71717A" />
+            <Text style={styles.emptyPostTitle}>Belum Ada Foto Terunggah</Text>
+            <Text style={styles.emptyPostSub}>Foto momen lari atau olahragamu akan muncul di sini.</Text>
+            <TouchableOpacity 
+              style={styles.emptyAddPostBtn}
+              onPress={() => (navigation as any).navigate('CreatePost')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.emptyAddPostBtnText}>+ Posting Foto Pertama</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.myPostsGrid}>
+            {myPosts.map((p) => (
+              <View key={p.id} style={styles.myPostThumbWrapper}>
+                {p.image_url ? (
+                  <Image source={{ uri: p.image_url }} style={styles.myPostThumbImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.myPostTextOnlyBox}>
+                    <Text style={styles.myPostTextOnly} numberOfLines={3}>{p.caption}</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* FOOTER APP BRANDING */}
@@ -1972,5 +2031,80 @@ const styles = StyleSheet.create({
     color: '#D7FF00',
     fontSize: 12,
     fontWeight: '700',
+  },
+  addPostSmallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D7FF00',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  addPostSmallBtnText: {
+    color: '#000000',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  emptyPostCard: {
+    backgroundColor: '#121217',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  emptyPostTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  emptyPostSub: {
+    color: '#71717A',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  emptyAddPostBtn: {
+    backgroundColor: '#1E1E28',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 255, 0, 0.3)',
+  },
+  emptyAddPostBtnText: {
+    color: '#D7FF00',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  myPostsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  myPostThumbWrapper: {
+    width: '31%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#181820',
+  },
+  myPostThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  myPostTextOnlyBox: {
+    flex: 1,
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#181820',
+  },
+  myPostTextOnly: {
+    color: '#A1A1AA',
+    fontSize: 10,
+    textAlign: 'center',
   },
 });
