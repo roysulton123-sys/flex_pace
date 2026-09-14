@@ -17,6 +17,8 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { decode } from 'base64-arraybuffer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PREVIEW_WIDTH = Math.min(SCREEN_WIDTH - 48, 340);
@@ -31,12 +33,37 @@ export default function ShareStoryScreen() {
 
   // Ambil parameter aktivitas yang dicapai
   const params = route.params || {};
+  const [latestActivity, setLatestActivity] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchLatestActivity = async () => {
+      if (params.distance_meters || params.distanceKm) return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from('activities')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data) {
+          setLatestActivity(data);
+        }
+      } catch (e) {
+        console.log('Error fetching latest activity for story:', e);
+      }
+    };
+    fetchLatestActivity();
+  }, []);
+
   const distanceKm = params.distance_meters 
     ? (params.distance_meters / 1000).toFixed(2) 
-    : (params.distanceKm || '5.20');
+    : (params.distanceKm || (latestActivity?.distance ? (latestActivity.distance / 1000).toFixed(2) : '5.20'));
   
-  const durationSeconds = params.duration_seconds || 1620;
-  const sportType = params.sport_type || 'Run';
+  const durationSeconds = params.duration_seconds || latestActivity?.duration || 1620;
+  const sportType = params.sport_type || latestActivity?.sport_type || 'Run';
   const isRide = sportType === 'Ride';
 
   // Format durasi
@@ -75,6 +102,7 @@ export default function ShareStoryScreen() {
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [activeTemplate, setActiveTemplate] = useState<LayoutTemplate>('bottom_hud');
   const [isExporting, setIsExporting] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // VIP Membership State
   const [isVipMember, setIsVipMember] = useState(false);
@@ -128,13 +156,19 @@ export default function ShareStoryScreen() {
         setSelfieUri(result.assets[0].uri);
       }
     } catch (error) {
-      Alert.alert('Gagal Membuka Kamera', 'Pastikan izin kamera sudah diaktifkan.');
+      Alert.alert('Error', 'Gagal membuka kamera perangkat.');
     }
   };
 
-  // Ambil dari galeri
+  // Ambil foto dari Galeri
   const pickFromGallery = async () => {
     try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Izin Galeri Ditolak', 'Beri akses galeri untuk memilih foto olahraga.');
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -150,7 +184,129 @@ export default function ShareStoryScreen() {
     }
   };
 
-  // Export & Share
+  // Posting langsung ke Story Beranda Flex Pace (24 Jam)
+  const handlePublishToAppStory = async () => {
+    if (!viewShotRef.current) return;
+    setIsPublishing(true);
+
+    try {
+      // 1. Capture 9:16 canvas as base64
+      const base64Data = await captureRef(viewShotRef, {
+        format: 'jpg',
+        quality: 0.88,
+        result: 'base64',
+      });
+
+      let finalPhotoUrl = `data:image/jpeg;base64,${base64Data}`;
+
+      // 2. Cek pengguna yang sedang login & upload ke storage jika memungkinkan
+      const { data: { user } } = await supabase.auth.getUser();
+      let athleteName = 'Flex Athlete';
+      let athleteAvatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80';
+      let athleteUserId = user?.id || 'guest';
+
+      if (user) {
+        athleteUserId = user.id;
+
+        // Coba upload file ke Supabase Storage bucket 'media'
+        try {
+          const fileName = `stories/${user.id}-${Date.now()}.jpg`;
+          const { error: uploadErr } = await supabase.storage
+            .from('media')
+            .upload(fileName, decode(base64Data), {
+              contentType: 'image/jpeg',
+              upsert: true,
+            });
+
+          if (!uploadErr) {
+            const { data: publicUrlData } = supabase.storage
+              .from('media')
+              .getPublicUrl(fileName);
+            if (publicUrlData?.publicUrl) {
+              finalPhotoUrl = publicUrlData.publicUrl;
+            }
+          }
+        } catch (storageErr) {
+          console.log('Supabase storage upload fallback to local data URI:', storageErr);
+        }
+
+        // Ambil nama & foto profil pengguna
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('name, avatar_url')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (profile?.name) athleteName = profile.name;
+          if (profile?.avatar_url) athleteAvatar = profile.avatar_url;
+        } catch (profErr) {
+          console.log('Error fetching user profile for story:', profErr);
+        }
+      }
+
+      // 3. Buat objek Story baru
+      const newStory = {
+        id: `story_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        user_id: athleteUserId,
+        name: athleteName,
+        avatar: athleteAvatar,
+        photo: finalPhotoUrl,
+        pace: paceStr,
+        distance: `${distanceKm} KM`,
+        time: formatDuration(durationSeconds),
+        bpm: '156',
+        ringColor: '#D7FF00',
+        badge: isRide ? 'RIDE' : 'RUN',
+        timeAgo: 'Baru saja',
+        created_at: new Date().toISOString(),
+        hasBakedHud: true,
+      };
+
+      // 4. Simpan ke AsyncStorage '@fp_user_stories'
+      const saved = await AsyncStorage.getItem('@fp_user_stories');
+      let existingStories: any[] = [];
+      if (saved) {
+        try {
+          existingStories = JSON.parse(saved);
+        } catch (e) {
+          existingStories = [];
+        }
+      }
+
+      // Filter story yang sudah kedaluwarsa (> 24 jam)
+      const nowTime = Date.now();
+      const validStories = existingStories.filter((s: any) => {
+        if (!s.created_at) return true;
+        return nowTime - new Date(s.created_at).getTime() < 24 * 60 * 60 * 1000;
+      });
+
+      // Simpan story baru di urutan paling depan
+      const updatedStories = [newStory, ...validStories];
+      await AsyncStorage.setItem('@fp_user_stories', JSON.stringify(updatedStories));
+
+      Alert.alert(
+        'Story Berhasil Diposting! 🎉',
+        'Story pace Anda kini aktif di Beranda aplikasi Flex Pace selama 24 jam.',
+        [
+          {
+            text: 'Lihat di Beranda',
+            onPress: () => {
+              // @ts-ignore
+              navigation.navigate('Main');
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Publish story error:', error);
+      Alert.alert('Gagal Memposting Story', error.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  // Export & Share ke Aplikasi Luar (WhatsApp / Instagram)
   const handleExportAndShare = async () => {
     if (!viewShotRef.current) return;
     setIsExporting(true);
@@ -570,22 +726,48 @@ export default function ShareStoryScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* TOMBOL UTAMA: "BAGIKAN" */}
-        <TouchableOpacity 
-          style={styles.shareMainBtn} 
-          onPress={handleExportAndShare}
-          disabled={isExporting}
-          activeOpacity={0.85}
-        >
-          {isExporting ? (
-            <ActivityIndicator color="#000000" />
-          ) : (
-            <View style={styles.shareBtnContent}>
-              <Ionicons name="share-social-outline" size={20} color="#000000" style={{ marginRight: 8 }} />
-              <Text style={styles.shareMainBtnText}>Bagikan</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        {/* TOMBOL AKSI UTAMA */}
+        <View style={styles.actionButtonsContainer}>
+          {/* Tombol 1: Posting ke Story Beranda */}
+          <TouchableOpacity 
+            style={styles.publishStoryBtn} 
+            onPress={handlePublishToAppStory}
+            disabled={isPublishing || isExporting}
+            activeOpacity={0.85}
+          >
+            {isPublishing ? (
+              <View style={styles.shareBtnContent}>
+                <ActivityIndicator color="#000000" style={{ marginRight: 8 }} />
+                <Text style={styles.publishStoryBtnText}>Memposting Story...</Text>
+              </View>
+            ) : (
+              <View style={styles.shareBtnContent}>
+                <Ionicons name="flash" size={20} color="#000000" style={{ marginRight: 8 }} />
+                <Text style={styles.publishStoryBtnText}>Posting ke Story Beranda</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Tombol 2: Bagikan ke Luar (WhatsApp / Instagram) */}
+          <TouchableOpacity 
+            style={styles.shareExternalBtn} 
+            onPress={handleExportAndShare}
+            disabled={isPublishing || isExporting}
+            activeOpacity={0.85}
+          >
+            {isExporting ? (
+              <View style={styles.shareBtnContent}>
+                <ActivityIndicator color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.shareExternalBtnText}>Menyiapkan Gambar...</Text>
+              </View>
+            ) : (
+              <View style={styles.shareBtnContent}>
+                <Ionicons name="share-social-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.shareExternalBtnText}>Bagikan ke Luar (WA / IG)</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* MODAL VIP PRO UNTUK TEMPLATE */}
         <Modal
@@ -1075,12 +1257,18 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // TOMBOL BAGIKAN
-  shareMainBtn: {
+  // TOMBOL AKSI UTAMA (POSTING APP & SHARE EXTERNAL)
+  actionButtonsContainer: {
     width: PREVIEW_WIDTH,
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 24,
+  },
+  publishStoryBtn: {
+    width: '100%',
     backgroundColor: '#D7FF00',
     paddingVertical: 15,
-    borderRadius: 20,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#D7FF00',
@@ -1089,15 +1277,31 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  shareBtnContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  shareMainBtnText: {
+  publishStoryBtnText: {
     color: '#000000',
     fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0.3,
+  },
+  shareExternalBtn: {
+    width: '100%',
+    backgroundColor: '#1C1C24',
+    paddingVertical: 14,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  shareExternalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  shareBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 
   // VIP CHIP STYLES

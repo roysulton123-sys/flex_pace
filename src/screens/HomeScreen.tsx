@@ -11,7 +11,8 @@ import {
   ScrollView, 
   Modal, 
   Dimensions, 
-  Animated 
+  Animated,
+  Alert 
 } from 'react-native';
 import ActivityCard, { ActivityData } from '../components/ActivityCard';
 import PostCard, { PostData } from '../components/PostCard';
@@ -24,6 +25,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface AthleteStory {
   id: string;
+  user_id?: string;
   name: string;
   avatar: string;
   photo: string;
@@ -34,6 +36,8 @@ interface AthleteStory {
   ringColor: string;
   badge: string;
   timeAgo: string;
+  created_at?: string;
+  hasBakedHud?: boolean;
 }
 
 export default function HomeScreen() {
@@ -101,7 +105,17 @@ export default function HomeScreen() {
     try {
       const saved = await AsyncStorage.getItem('@fp_user_stories');
       if (saved) {
-        setStories(JSON.parse(saved));
+        const parsed: AthleteStory[] = JSON.parse(saved);
+        const nowTime = Date.now();
+        // Hanya simpan dan tampilkan story yang aktif dalam 24 jam terakhir
+        const validStories = parsed.filter((s: AthleteStory) => {
+          if (!s.created_at) return true;
+          return nowTime - new Date(s.created_at).getTime() < 24 * 60 * 60 * 1000;
+        });
+        if (validStories.length !== parsed.length) {
+          await AsyncStorage.setItem('@fp_user_stories', JSON.stringify(validStories));
+        }
+        setStories(validStories);
       } else {
         setStories([]);
       }
@@ -233,45 +247,89 @@ export default function HomeScreen() {
     setSelectedStory(null);
   };
 
-  // Render Horizontal Story Bar
-  const renderStoryBar = () => (
-    <View style={styles.storyBarContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storyScroll}>
-        {/* Tombol Tambah Story Anda */}
-        <TouchableOpacity 
-          style={styles.storyItem} 
-          activeOpacity={0.8}
-          onPress={() => setAddStoryModalVisible(true)}
-        >
-          <View style={styles.myStoryRing}>
-            <Image 
-              source={{ uri: userProfile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80' }} 
-              style={styles.storyAvatar} 
-            />
-            <View style={styles.myStoryAddBadge}>
-              <Ionicons name="add" size={14} color="#000000" />
-            </View>
-          </View>
-          <Text style={styles.storyName} numberOfLines={1}>Cerita Anda</Text>
-        </TouchableOpacity>
+  const handleDeleteStory = (storyId: string) => {
+    Alert.alert(
+      'Hapus Story',
+      'Apakah Anda yakin ingin menghapus story ini dari Beranda?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              handleCloseStory();
+              const updated = stories.filter(s => s.id !== storyId);
+              setStories(updated);
+              await AsyncStorage.setItem('@fp_user_stories', JSON.stringify(updated));
+            } catch (e) {
+              console.error('Error deleting story:', e);
+            }
+          }
+        }
+      ]
+    );
+  };
 
-        {/* Story Riil Pengguna */}
-        {stories.map((story) => (
+  // Render Horizontal Story Bar
+  const renderStoryBar = () => {
+    const myStory = stories.find(s => 
+      (currentUserId && s.user_id === currentUserId) || 
+      (userProfile?.name && s.name === userProfile.name)
+    );
+    const otherStories = stories.filter(s => s.id !== myStory?.id);
+
+    return (
+      <View style={styles.storyBarContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storyScroll}>
+          {/* Tombol Cerita Anda */}
           <TouchableOpacity 
-            key={story.id} 
             style={styles.storyItem} 
             activeOpacity={0.8}
-            onPress={() => handleOpenStory(story)}
+            onPress={() => {
+              if (myStory) {
+                handleOpenStory(myStory);
+              } else {
+                setAddStoryModalVisible(true);
+              }
+            }}
+            onLongPress={() => setAddStoryModalVisible(true)}
           >
-            <View style={[styles.athleteStoryRing, { borderColor: story.ringColor || '#D7FF00' }]}>
-              <Image source={{ uri: story.avatar }} style={styles.storyAvatar} />
-              <View style={[styles.storyPaceBadge, { backgroundColor: story.ringColor || '#D7FF00' }]}>
-                <Text style={styles.storyPaceBadgeText}>{story.badge || 'PACE'}</Text>
-              </View>
+            <View style={[styles.myStoryRing, myStory ? styles.myStoryRingActive : null]}>
+              <Image 
+                source={{ uri: userProfile?.avatar_url || (myStory ? myStory.avatar : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80') }} 
+                style={styles.storyAvatar} 
+              />
+              <TouchableOpacity 
+                style={[styles.myStoryAddBadge, myStory ? styles.myStoryActiveBadge : null]}
+                onPress={() => setAddStoryModalVisible(true)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="add" size={14} color="#000000" />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.storyName} numberOfLines={1}>{story.name}</Text>
+            <Text style={[styles.storyName, myStory ? styles.myStoryNameActive : null]} numberOfLines={1}>
+              Cerita Anda
+            </Text>
           </TouchableOpacity>
-        ))}
+
+          {/* Story Riil Pengguna */}
+          {otherStories.map((story) => (
+            <TouchableOpacity 
+              key={story.id} 
+              style={styles.storyItem} 
+              activeOpacity={0.8}
+              onPress={() => handleOpenStory(story)}
+            >
+              <View style={[styles.athleteStoryRing, { borderColor: story.ringColor || '#D7FF00' }]}>
+                <Image source={{ uri: story.avatar }} style={styles.storyAvatar} />
+                <View style={[styles.storyPaceBadge, { backgroundColor: story.ringColor || '#D7FF00' }]}>
+                  <Text style={styles.storyPaceBadgeText}>{story.badge || 'PACE'}</Text>
+                </View>
+              </View>
+              <Text style={styles.storyName} numberOfLines={1}>{story.name}</Text>
+            </TouchableOpacity>
+          ))}
 
         {stories.length === 0 && (
           <TouchableOpacity 
@@ -314,6 +372,7 @@ export default function HomeScreen() {
       </View>
     </View>
   );
+};
 
   // Render Mosaic (2-Column Grid) Item
   const renderMosaicItem = ({ item }: { item: PostData }) => {
@@ -513,7 +572,7 @@ export default function HomeScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetOptionTitle}>Story 9:16 Pace Selfie</Text>
-                <Text style={styles.sheetOptionSub}>5 template HUD telemetri untuk WhatsApp & Instagram Stories.</Text>
+                <Text style={styles.sheetOptionSub}>Post ke Story Beranda atau bagikan ke WhatsApp & Instagram.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#71717A" />
             </TouchableOpacity>
@@ -582,47 +641,62 @@ export default function HomeScreen() {
               />
             </View>
 
-            {/* Header: Athlete Avatar & Close Button */}
+            {/* Header: Athlete Avatar & Close / Delete Action */}
             <View style={styles.storyViewerHeader}>
               <View style={styles.storyViewerUser}>
                 <Image source={{ uri: selectedStory.avatar }} style={styles.storyViewerAvatar} />
                 <View>
                   <Text style={styles.storyViewerName}>{selectedStory.name}</Text>
-                  <Text style={styles.storyViewerTime}>{selectedStory.timeAgo}</Text>
+                  <Text style={styles.storyViewerTime}>{selectedStory.timeAgo || 'Baru saja'}</Text>
                 </View>
               </View>
 
-              <TouchableOpacity onPress={handleCloseStory} style={styles.storyViewerClose}>
-                <Ionicons name="close" size={26} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
+              <View style={styles.storyViewerActions}>
+                {/* Tombol Hapus Story jika milik akun pengguna sendiri */}
+                {(selectedStory.user_id === currentUserId || (userProfile?.name && selectedStory.name === userProfile.name)) && (
+                  <TouchableOpacity 
+                    onPress={() => handleDeleteStory(selectedStory.id)} 
+                    style={styles.storyViewerDeleteBtn}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#FF453A" />
+                  </TouchableOpacity>
+                )}
 
-            {/* Center HUD Telemetry Overlay Card */}
-            <View style={styles.storyViewerHud}>
-              <View style={styles.hudHeader}>
-                <Ionicons name="flash" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
-                <Text style={styles.hudBrand}>FLEX PACE TELEMETRY</Text>
-              </View>
-
-              <View style={styles.hudStatsGrid}>
-                <View style={styles.hudStatBox}>
-                  <Text style={styles.hudLabel}>PACE</Text>
-                  <Text style={styles.hudVal}>{selectedStory.pace}</Text>
-                </View>
-                <View style={styles.hudStatBox}>
-                  <Text style={styles.hudLabel}>JARAK</Text>
-                  <Text style={styles.hudVal}>{selectedStory.distance}</Text>
-                </View>
-                <View style={styles.hudStatBox}>
-                  <Text style={styles.hudLabel}>WAKTU</Text>
-                  <Text style={styles.hudVal}>{selectedStory.time}</Text>
-                </View>
-                <View style={styles.hudStatBox}>
-                  <Text style={styles.hudLabel}>HEART RATE</Text>
-                  <Text style={[styles.hudVal, { color: '#FF3B30' }]}>{selectedStory.bpm} bpm</Text>
-                </View>
+                <TouchableOpacity onPress={handleCloseStory} style={styles.storyViewerClose}>
+                  <Ionicons name="close" size={26} color="#FFFFFF" />
+                </TouchableOpacity>
               </View>
             </View>
+
+            {/* Center HUD Telemetry Overlay Card - Hanya tampil bila foto tidak memiliki baked HUD */}
+            {!selectedStory.hasBakedHud && (
+              <View style={styles.storyViewerHud}>
+                <View style={styles.hudHeader}>
+                  <Ionicons name="flash" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
+                  <Text style={styles.hudBrand}>FLEX PACE TELEMETRY</Text>
+                </View>
+
+                <View style={styles.hudStatsGrid}>
+                  <View style={styles.hudStatBox}>
+                    <Text style={styles.hudLabel}>PACE</Text>
+                    <Text style={styles.hudVal}>{selectedStory.pace}</Text>
+                  </View>
+                  <View style={styles.hudStatBox}>
+                    <Text style={styles.hudLabel}>JARAK</Text>
+                    <Text style={styles.hudVal}>{selectedStory.distance}</Text>
+                  </View>
+                  <View style={styles.hudStatBox}>
+                    <Text style={styles.hudLabel}>WAKTU</Text>
+                    <Text style={styles.hudVal}>{selectedStory.time}</Text>
+                  </View>
+                  <View style={styles.hudStatBox}>
+                    <Text style={styles.hudLabel}>HEART RATE</Text>
+                    <Text style={[styles.hudVal, { color: '#FF3B30' }]}>{selectedStory.bpm || '156'} bpm</Text>
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* Bottom Quick Reaction Row */}
             <View style={styles.storyViewerBottomBar}>
@@ -719,6 +793,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  myStoryRingActive: {
+    borderStyle: 'solid',
+    borderColor: '#D7FF00',
+    borderWidth: 2.5,
+    shadowColor: '#D7FF00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 5,
+  },
   myStoryAddBadge: {
     position: 'absolute',
     bottom: -2,
@@ -731,6 +815,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#0A0A0C',
+  },
+  myStoryActiveBadge: {
+    backgroundColor: '#D7FF00',
+  },
+  myStoryNameActive: {
+    color: '#D7FF00',
+    fontWeight: '800',
   },
   athleteStoryRing: {
     position: 'relative',
@@ -1062,6 +1153,18 @@ const styles = StyleSheet.create({
   storyViewerTime: {
     color: '#D4D4D8',
     fontSize: 11,
+  },
+  storyViewerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  storyViewerDeleteBtn: {
+    padding: 6,
+    backgroundColor: 'rgba(255, 69, 58, 0.2)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 69, 58, 0.4)',
   },
   storyViewerClose: {
     padding: 6,
