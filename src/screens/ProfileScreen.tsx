@@ -11,12 +11,16 @@ import {
   Share,
   Alert,
   Switch,
-  Modal
+  Modal,
+  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GRID_THUMB_SIZE = (SCREEN_WIDTH - 36) / 3;
 
 interface UserStats {
   totalDistanceKm: number;
@@ -38,6 +42,8 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [myPosts, setMyPosts] = useState<any[]>([]);
+  const [activeProfileTab, setActiveProfileTab] = useState<'posts' | 'stats'>('posts');
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
 
   // Privacy Settings
   const [isPrivateAccount, setIsPrivateAccount] = useState(false);
@@ -319,10 +325,11 @@ export default function ProfileScreen() {
   const handleTag = `@${displayName.toLowerCase().replace(/\s+/g, '')}`;
 
   return (
-    <ScrollView 
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
+    <View style={styles.container}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl 
           refreshing={refreshing} 
@@ -332,280 +339,276 @@ export default function ProfileScreen() {
         />
       }
     >
-      {/* PROFILE HEADER CARD */}
-      <View style={styles.profileHeaderCard}>
+      {/* 1. COMPACT PROFILE HEADER */}
+      <View style={styles.compactHeaderCard}>
         {/* Glow accent */}
         <View style={styles.glowOrb} />
 
-        <View style={styles.avatarRow}>
+        <View style={styles.avatarStatsRow}>
+          {/* Avatar */}
           <View style={[styles.avatarContainer, profile?.is_premium && styles.avatarContainerVip]}>
             <Image source={{ uri: displayAvatar }} style={[styles.avatar, profile?.is_premium && styles.avatarVip]} />
-            <View style={styles.onlineBadge} />
+            {profile?.is_premium ? (
+              <View style={styles.vipBadgeFloat}>
+                <Ionicons name="trophy" size={10} color="#000000" />
+              </View>
+            ) : (
+              <View style={styles.onlineBadge} />
+            )}
           </View>
 
-          <View style={styles.headerInfo}>
-            <View style={styles.nameRow}>
-              <Text style={styles.displayName}>{displayName}</Text>
-              {profile?.is_premium && (
-                <View style={styles.vipCrownBadge}>
-                  <Ionicons name="trophy" size={11} color="#000000" style={{ marginRight: 3 }} />
-                  <Text style={styles.vipCrownText}>VIP PRO</Text>
-                </View>
-              )}
+          {/* Quick Stats Strip (Instagram/Strava style) */}
+          <View style={styles.quickStatsBox}>
+            <View style={styles.quickStatCol}>
+              <Text style={styles.quickStatVal}>{stats.totalDistanceKm.toFixed(1)}</Text>
+              <Text style={styles.quickStatLbl}>KM</Text>
             </View>
-            <Text style={styles.handleText}>{handleTag}</Text>
-
-            {/* BADGES ROW */}
-            <View style={styles.badgeRow}>
-              {profile?.role === 'organizer' ? (
-                <View style={[styles.capsuleBadge, styles.organizerBadge]}>
-                  <Ionicons name="flash" size={11} color="#D7FF00" style={{ marginRight: 4 }} />
-                  <Text style={styles.organizerText}>ORGANIZER</Text>
-                </View>
-              ) : (
-                <View style={styles.capsuleBadge}>
-                  <Ionicons name="barbell-outline" size={12} color="#A1A1AA" style={{ marginRight: 4 }} />
-                  <Text style={styles.capsuleText}>ATHLETE</Text>
-                </View>
-              )}
-
-              {profile?.is_premium && (
-                <View style={[styles.capsuleBadge, styles.premiumBadge]}>
-                  <Ionicons name="star" size={11} color="#000000" style={{ marginRight: 3 }} />
-                  <Text style={styles.premiumText}>PRO</Text>
-                </View>
-              )}
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStatCol}>
+              <Text style={styles.quickStatVal}>{stats.totalActivities}</Text>
+              <Text style={styles.quickStatLbl}>Sesi</Text>
+            </View>
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStatCol}>
+              <Text style={styles.quickStatVal}>{formatHoursMinutes(stats.totalTimeSeconds)}</Text>
+              <Text style={styles.quickStatLbl}>Waktu</Text>
+            </View>
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStatCol}>
+              <Text style={styles.quickStatVal}>{myPosts.length}</Text>
+              <Text style={styles.quickStatLbl}>Foto</Text>
             </View>
           </View>
         </View>
 
-        {/* BIO SECTION */}
-        {profile?.bio ? (
-          <View style={styles.bioContainer}>
-            <Text style={styles.bioText}>{profile.bio}</Text>
+        {/* Identity: Name, Handle, Badges */}
+        <View style={styles.identityBox}>
+          <View style={styles.nameRow}>
+            <Text style={styles.displayName}>{displayName}</Text>
+            {profile?.is_premium && (
+              <View style={styles.vipCrownBadge}>
+                <Ionicons name="trophy" size={10} color="#000000" style={{ marginRight: 3 }} />
+                <Text style={styles.vipCrownText}>VIP PRO</Text>
+              </View>
+            )}
+            {profile?.role === 'organizer' && (
+              <View style={styles.organizerBadge}>
+                <Text style={styles.organizerText}>ORGANIZER</Text>
+              </View>
+            )}
           </View>
-        ) : (
-          <TouchableOpacity 
-            style={styles.emptyBioPrompt}
-            onPress={() => {
-              // @ts-ignore
-              navigation.navigate('EditProfile');
-            }}
-          >
-            <Text style={styles.emptyBioText}>+ Tambahkan bio profilmu</Text>
-          </TouchableOpacity>
-        )}
+          <Text style={styles.handleText}>{handleTag} • PIN: {athletePin}</Text>
 
-        {/* ACTION BUTTONS */}
+          {/* Bio */}
+          {profile?.bio ? (
+            <Text style={styles.bioText} numberOfLines={3}>{profile.bio}</Text>
+          ) : (
+            <TouchableOpacity 
+              style={styles.emptyBioPrompt}
+              onPress={() => (navigation as any).navigate('EditProfile')}
+            >
+              <Text style={styles.emptyBioText}>+ Tambahkan bio profilmu</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Action Buttons Row */}
         <View style={styles.actionsRow}>
           <TouchableOpacity 
             style={styles.editButton} 
-            onPress={() => {
-              // @ts-ignore
-              navigation.navigate('EditProfile');
-            }}
+            onPress={() => (navigation as any).navigate('EditProfile')}
             activeOpacity={0.8}
           >
-            <Ionicons name="pencil" size={15} color="#000000" style={{ marginRight: 6 }} />
+            <Ionicons name="pencil" size={14} color="#000000" style={{ marginRight: 6 }} />
             <Text style={styles.editButtonText}>Edit Profil</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={styles.iconActionButton} 
+            style={styles.shareButton} 
             onPress={handleShareProfile}
             activeOpacity={0.8}
           >
-            <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+            <Ionicons name="share-social-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.shareButtonText}>Bagikan</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.iconActionButton, styles.logoutIconBtn]} 
-            onPress={handleLogout}
+            style={styles.iconBtn} 
+            onPress={() => (navigation as any).navigate('InviteFriends')}
             activeOpacity={0.8}
           >
-            <Ionicons name="log-out-outline" size={18} color="#FF453A" />
+            <Ionicons name="person-add-outline" size={16} color="#D7FF00" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.iconBtn} 
+            onPress={() => setSettingsModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="settings-outline" size={17} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* SMART PROFILE SHARE BUTTON CARD */}
-        <View style={styles.profileShareCard}>
-          <View style={styles.profileShareHeader}>
-            <Ionicons name="link" size={13} color="#D7FF00" style={{ marginRight: 6 }} />
-            <Text style={styles.profileShareLabel}>TAUTAN PINTAR PROFIL (AUTO-DETECT APLIKASI / WEB)</Text>
-          </View>
-          <View style={styles.profileShareButtonsRow}>
-            <TouchableOpacity 
-              style={styles.shareProfilePillBtn}
-              onPress={handleShareProfile}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="share-social" size={14} color="#000000" style={{ marginRight: 6 }} />
-              <Text style={styles.shareProfilePillText}>Bagikan Profil Saya</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.copyProfilePillBtn}
-              onPress={handleCopyProfileLink}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="copy-outline" size={14} color="#D7FF00" style={{ marginRight: 6 }} />
-              <Text style={styles.copyProfilePillText}>Salin Tautan</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* BANNER UNDANG TEMAN & ATLET */}
+      {/* 2. SEGMENTED TABS: POSTINGAN VS STATISTIK */}
+      <View style={styles.tabsHeader}>
         <TouchableOpacity 
-          style={styles.inviteFriendsBanner}
-          onPress={() => {
-            // @ts-ignore
-            navigation.navigate('InviteFriends');
-          }}
-          activeOpacity={0.85}
+          style={[styles.tabBtn, activeProfileTab === 'posts' && styles.tabBtnActive]}
+          onPress={() => setActiveProfileTab('posts')}
+          activeOpacity={0.8}
         >
-          <View style={styles.inviteBannerLeft}>
-            <View style={styles.inviteIconCircle}>
-              <Ionicons name="people" size={16} color="#000000" />
-            </View>
-            <View>
-              <Text style={styles.inviteBannerTitle}>Undang Teman & Atlet</Text>
-              <Text style={styles.inviteBannerSub}>Bagikan kode & ikuti sesama atlet</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#D7FF00" />
+          <Ionicons 
+            name="grid-outline" 
+            size={16} 
+            color={activeProfileTab === 'posts' ? '#000000' : '#A1A1AA'} 
+            style={{ marginRight: 6 }} 
+          />
+          <Text style={[styles.tabBtnText, activeProfileTab === 'posts' && styles.tabBtnTextActive]}>
+            Postingan ({myPosts.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.tabBtn, activeProfileTab === 'stats' && styles.tabBtnActive]}
+          onPress={() => setActiveProfileTab('stats')}
+          activeOpacity={0.8}
+        >
+          <Ionicons 
+            name="speedometer-outline" 
+            size={16} 
+            color={activeProfileTab === 'stats' ? '#000000' : '#A1A1AA'} 
+            style={{ marginRight: 6 }} 
+          />
+          <Text style={[styles.tabBtnText, activeProfileTab === 'stats' && styles.tabBtnTextActive]}>
+            Statistik & AI
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* KARTU VIP MEMBERSHIP / UPGRADE GATEWAY */}
-      {profile?.is_premium ? (
-        <View style={styles.vipMembershipCard}>
-          <View style={styles.vipCardHeader}>
-            <View style={styles.vipCrownIconBox}>
-              <Ionicons name="trophy" size={20} color="#000000" />
+      {/* 3. TAB 1: POSTINGAN SAYA */}
+      {activeProfileTab === 'posts' && (
+        <View style={styles.tabContentContainer}>
+          {myPosts.length === 0 ? (
+            <View style={styles.emptyPostCard}>
+              <View style={styles.emptyCameraIcon}>
+                <Ionicons name="camera-outline" size={28} color="#71717A" />
+              </View>
+              <Text style={styles.emptyPostTitle}>Belum Ada Foto Terunggah</Text>
+              <Text style={styles.emptyPostSub}>Foto momen lari atau olahragamu akan muncul di sini.</Text>
+              <TouchableOpacity 
+                style={styles.emptyAddPostBtn}
+                onPress={() => (navigation as any).navigate('CreatePost')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={16} color="#000000" style={{ marginRight: 4 }} />
+                <Text style={styles.emptyAddPostBtnText}>Posting Foto Pertama</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.vipCardTitle}>FLEX PACE PRO ORGANIZER</Text>
-              <Text style={styles.vipCardStatus}>Status: Berlangganan Aktif (Tahunan/Bulanan)</Text>
+          ) : (
+            <View style={styles.myPostsGrid}>
+              {myPosts.map((p) => (
+                <View key={p.id} style={styles.myPostThumbWrapper}>
+                  {p.image_url ? (
+                    <Image source={{ uri: p.image_url }} style={styles.myPostThumbImage} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.myPostTextOnlyBox}>
+                      <Text style={styles.myPostTextOnly} numberOfLines={3}>{p.caption}</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
             </View>
-            <View style={styles.vipActiveBadge}>
-              <Text style={styles.vipActiveText}>VIP AKTIF</Text>
-            </View>
-          </View>
-          <View style={styles.vipDivider} />
-          <View style={styles.vipPerksRow}>
-            <View style={styles.vipPerkItem}>
-              <Ionicons name="checkmark-circle" size={14} color="#FFD700" style={{ marginRight: 4 }} />
-              <Text style={styles.vipPerkText}>Akses Penuh Publikasi Event</Text>
-            </View>
-            <View style={styles.vipPerkItem}>
-              <Ionicons name="checkmark-circle" size={14} color="#FFD700" style={{ marginRight: 4 }} />
-              <Text style={styles.vipPerkText}>Lencana Emas & Proteksi Anti-Spam</Text>
-            </View>
-          </View>
+          )}
         </View>
-      ) : (
-        <TouchableOpacity 
-          style={styles.upgradeCard}
-          onPress={() => setMembershipModalVisible(true)}
-          activeOpacity={0.85}
-        >
-          <View style={styles.upgradeIconBox}>
-            <Ionicons name="trophy" size={22} color="#FFD700" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.upgradeTitle}>Upgrade ke Membership PRO</Text>
-            <Text style={styles.upgradeDesc}>Buka akses publikasi event Fun Run & dapatkan lencana mahkota emas.</Text>
-          </View>
-          <View style={styles.upgradeBtn}>
-            <Text style={styles.upgradeBtnText}>Langganan</Text>
-          </View>
-        </TouchableOpacity>
       )}
 
-      {/* STATS OVERVIEW SECTION */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>STATISTIK PERFORMA</Text>
-          <Text style={styles.sectionSubtitle}>Real-time tracking</Text>
-        </View>
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statTile}>
-            <View style={styles.statIconBadge}>
-              <Ionicons name="speedometer-outline" size={18} color="#D7FF00" />
-            </View>
-            <Text style={styles.statMainValue}>
-              {stats.totalDistanceKm.toFixed(1)}
-              <Text style={styles.statUnit}> km</Text>
-            </Text>
-            <Text style={styles.statLabel}>Total Jarak</Text>
-          </View>
-
-          <View style={styles.statTile}>
-            <View style={styles.statIconBadge}>
-              <Ionicons name="flame-outline" size={18} color="#FF9F0A" />
-            </View>
-            <Text style={styles.statMainValue}>
-              {stats.totalActivities}
-              <Text style={styles.statUnit}> sesi</Text>
-            </Text>
-            <Text style={styles.statLabel}>Total Aktivitas</Text>
-          </View>
-
-          <View style={styles.statTile}>
-            <View style={styles.statIconBadge}>
-              <Ionicons name="time-outline" size={18} color="#30D158" />
-            </View>
-            <Text style={styles.statMainValue}>
-              {formatHoursMinutes(stats.totalTimeSeconds)}
-            </Text>
-            <Text style={styles.statLabel}>Durasi Olahraga</Text>
-          </View>
-
-          <View style={styles.statTile}>
-            <View style={styles.statIconBadge}>
-              <Ionicons name="trophy-outline" size={18} color="#FFD60A" />
-            </View>
-            <Text style={styles.statMainValue}>
-              {stats.longestRunKm.toFixed(1)}
-              <Text style={styles.statUnit}> km</Text>
-            </Text>
-            <Text style={styles.statLabel}>Rekor Terjauh</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* AI ATHLETIC LAB & PRO INSIGHTS (Eksklusif VIP) */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="sparkles" size={14} color="#FFD700" style={{ marginRight: 6 }} />
-            <Text style={[styles.sectionTitle, { color: '#FFD700' }]}>AI ATHLETIC LAB & PREDIKSI LOMBA</Text>
-          </View>
-          <View style={profile?.is_premium ? styles.vipLabUnlockedBadge : styles.vipLabLockedBadge}>
-            <Ionicons 
-              name={profile?.is_premium ? "checkmark-circle" : "lock-closed"} 
-              size={11} 
-              color={profile?.is_premium ? "#FFD700" : "#71717A"} 
-              style={{ marginRight: 3 }} 
-            />
-            <Text style={profile?.is_premium ? styles.vipLabUnlockedText : styles.vipLabLockedText}>
-              {profile?.is_premium ? "VIP UNLOCKED" : "PRO ONLY"}
-            </Text>
-          </View>
-        </View>
-
-        {profile?.is_premium ? (
-          /* VIP Unlocked Card */
-          <View style={styles.aiLabCard}>
-            <View style={styles.aiLabHeader}>
-              <View style={styles.aiLabIconBox}>
-                <Ionicons name="hardware-chip" size={24} color="#000000" />
-              </View>
+      {/* 4. TAB 2: STATISTIK & AI LAB */}
+      {activeProfileTab === 'stats' && (
+        <View style={styles.tabContentContainer}>
+          {/* VIP Status / Compact Upgrade Banner */}
+          {profile?.is_premium ? (
+            <View style={styles.vipStatusCard}>
+              <Ionicons name="trophy" size={18} color="#FFD700" style={{ marginRight: 8 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.aiLabTitle}>Jack Daniels' VDOT & VO2 Max Engine</Text>
-                <Text style={styles.aiLabSub}>Algoritma adaptif berbasis kecepatan & ketahanan Anda</Text>
+                <Text style={styles.vipStatusTitle}>FLEX PACE PRO ORGANIZER</Text>
+                <Text style={styles.vipStatusSub}>Status: Berlangganan Aktif</Text>
               </View>
+              <View style={styles.vipPillBadge}>
+                <Text style={styles.vipPillText}>VIP</Text>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.compactUpgradeBanner}
+              onPress={() => setMembershipModalVisible(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="trophy" size={20} color="#FFD700" style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.compactUpgradeTitle}>Upgrade ke Membership PRO</Text>
+                <Text style={styles.compactUpgradeSub}>Publikasi event & mahkota emas VIP</Text>
+              </View>
+              <View style={styles.compactUpgradeBtn}>
+                <Text style={styles.compactUpgradeBtnText}>Upgrade</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* 4 Performance Metric Cards */}
+          <View style={styles.statsGrid}>
+            <View style={styles.statTile}>
+              <Ionicons name="speedometer-outline" size={16} color="#D7FF00" style={{ marginBottom: 4 }} />
+              <Text style={styles.statMainValue}>
+                {stats.totalDistanceKm.toFixed(1)}
+                <Text style={styles.statUnit}> km</Text>
+              </Text>
+              <Text style={styles.statLabel}>Total Jarak</Text>
+            </View>
+
+            <View style={styles.statTile}>
+              <Ionicons name="flame-outline" size={16} color="#FF9F0A" style={{ marginBottom: 4 }} />
+              <Text style={styles.statMainValue}>
+                {stats.totalActivities}
+                <Text style={styles.statUnit}> sesi</Text>
+              </Text>
+              <Text style={styles.statLabel}>Total Aktivitas</Text>
+            </View>
+
+            <View style={styles.statTile}>
+              <Ionicons name="time-outline" size={16} color="#30D158" style={{ marginBottom: 4 }} />
+              <Text style={styles.statMainValue}>
+                {formatHoursMinutes(stats.totalTimeSeconds)}
+              </Text>
+              <Text style={styles.statLabel}>Durasi Olahraga</Text>
+            </View>
+
+            <View style={styles.statTile}>
+              <Ionicons name="trophy-outline" size={16} color="#FFD60A" style={{ marginBottom: 4 }} />
+              <Text style={styles.statMainValue}>
+                {stats.longestRunKm.toFixed(1)}
+                <Text style={styles.statUnit}> km</Text>
+              </Text>
+              <Text style={styles.statLabel}>Rekor Terjauh</Text>
+            </View>
+          </View>
+
+          {/* AI Athletic Lab Card */}
+          <View style={styles.aiLabCompactCard}>
+            <View style={styles.aiLabCardTop}>
+              <Ionicons name="sparkles" size={18} color="#FFD700" style={{ marginRight: 8 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.aiLabCardTitle}>AI Athletic Lab & VDOT</Text>
+                <Text style={styles.aiLabCardSub}>Estimasi VO2 Max & Prediksi Lomba Jack Daniels</Text>
+              </View>
+              {profile?.is_premium ? (
+                <View style={styles.unlockedPill}>
+                  <Text style={styles.unlockedPillText}>VIP</Text>
+                </View>
+              ) : (
+                <View style={styles.lockedPill}>
+                  <Ionicons name="lock-closed" size={11} color="#71717A" />
+                </View>
+              )}
             </View>
 
             <View style={styles.aiMetricsRow}>
@@ -615,166 +618,151 @@ export default function ProfileScreen() {
                 <Text style={styles.aiMetricSub}>{aiInsights.vo2Category}</Text>
               </View>
               <View style={styles.aiMetricBox}>
-                <Text style={styles.aiMetricLabel}>PREDIKSI 5K RUN</Text>
+                <Text style={styles.aiMetricLabel}>PREDIKSI 5K</Text>
                 <Text style={styles.aiMetricVal}>{aiInsights.t5kStr}</Text>
-                <Text style={styles.aiMetricSub}>Target Pace {aiInsights.p5kStr}/km</Text>
+                <Text style={styles.aiMetricSub}>{aiInsights.p5kStr}/km</Text>
               </View>
             </View>
 
             <TouchableOpacity 
-              style={styles.aiLabOpenBtn}
-              onPress={() => setAiLabModalVisible(true)}
+              style={styles.aiOpenBtn}
+              onPress={() => {
+                if (profile?.is_premium) {
+                  setAiLabModalVisible(true);
+                } else {
+                  setMembershipModalVisible(true);
+                }
+              }}
               activeOpacity={0.85}
             >
-              <Ionicons name="analytics" size={16} color="#000000" style={{ marginRight: 6 }} />
-              <Text style={styles.aiLabOpenBtnText}>Buka Laporan Lengkap AI Pace Coach</Text>
+              <Ionicons name={profile?.is_premium ? "analytics" : "lock-closed"} size={14} color="#000000" style={{ marginRight: 6 }} />
+              <Text style={styles.aiOpenBtnText}>
+                {profile?.is_premium ? "Buka Laporan Lengkap AI Coach" : "Buka Fitur AI Lab (Upgrade VIP)"}
+              </Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          /* Locked Card for Regular Member */
-          <TouchableOpacity 
-            style={styles.aiLabLockedCard}
-            onPress={() => setMembershipModalVisible(true)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.lockedIconOverlay}>
-              <Ionicons name="lock-closed" size={26} color="#FFD700" />
-            </View>
-            <Text style={styles.lockedTitle}>Buka Analisis Prediksi Waktu Lomba & AI Coach</Text>
-            <Text style={styles.lockedDesc}>
-              Dapatkan estimasi akurat waktu 5K, 10K, Half & Full Marathon, kalkulasi VO2 Max, serta rekomendasi pemulihan otot eksklusif bagi member VIP PRO.
-            </Text>
-            <View style={styles.unlockCtaBtn}>
-              <Ionicons name="trophy" size={14} color="#000000" style={{ marginRight: 5 }} />
-              <Text style={styles.unlockCtaText}>Buka Fitur Canggih VIP (Upgrade)</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* PENGATURAN PRIVASI & KEAMANAN AKUN */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>PRIVASI & KEAMANAN AKUN</Text>
-          <Text style={styles.sectionSubtitle}>Kontrol visibilitas publik</Text>
         </View>
-
-        <View style={styles.privacyCard}>
-          {/* Akun Privat */}
-          <View style={styles.privacyRow}>
-            <View style={styles.privacyTextCol}>
-              <View style={styles.privacyTitleRow}>
-                <Ionicons name="lock-closed-outline" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
-                <Text style={styles.privacyTitle}>Akun Privat</Text>
-              </View>
-              <Text style={styles.privacyDesc}>
-                Hanya pengikut terverifikasi yang dapat melihat linimasa dan riwayat aktivitas Anda.
-              </Text>
-            </View>
-            <Switch
-              value={isPrivateAccount}
-              onValueChange={togglePrivateAccount}
-              trackColor={{ false: '#26262E', true: '#D7FF00' }}
-              thumbColor={isPrivateAccount ? '#000000' : '#8E8E93'}
-            />
-          </View>
-
-          <View style={styles.privacyDivider} />
-
-          {/* Sembunyikan Peta Rute */}
-          <View style={styles.privacyRow}>
-            <View style={styles.privacyTextCol}>
-              <View style={styles.privacyTitleRow}>
-                <Ionicons name="eye-off-outline" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
-                <Text style={styles.privacyTitle}>Sembunyikan Jalur Rute Peta</Text>
-              </View>
-              <Text style={styles.privacyDesc}>
-                Menyembunyikan garis rute GPS di feed publik demi privasi lokasi rumah atau tempat kerja.
-              </Text>
-            </View>
-            <Switch
-              value={hideGpsRoute}
-              onValueChange={toggleHideGpsRoute}
-              trackColor={{ false: '#26262E', true: '#D7FF00' }}
-              thumbColor={hideGpsRoute ? '#000000' : '#8E8E93'}
-            />
-          </View>
-
-          <View style={styles.privacyDivider} />
-
-          {/* Sembunyikan Metrik Kesehatan */}
-          <View style={styles.privacyRow}>
-            <View style={styles.privacyTextCol}>
-              <View style={styles.privacyTitleRow}>
-                <Ionicons name="fitness-outline" size={16} color="#D7FF00" style={{ marginRight: 6 }} />
-                <Text style={styles.privacyTitle}>Sembunyikan Estimasi Biometrik</Text>
-              </View>
-              <Text style={styles.privacyDesc}>
-                Hanya tampilkan jarak tempuh dan waktu; sembunyikan estimasi kalori dan detak jantung dari profil publik.
-              </Text>
-            </View>
-            <Switch
-              value={hideBiometrics}
-              onValueChange={toggleHideBiometrics}
-              trackColor={{ false: '#26262E', true: '#D7FF00' }}
-              thumbColor={hideBiometrics ? '#000000' : '#8E8E93'}
-            />
-          </View>
-        </View>
-      </View>
-
-      {/* POSTINGAN & FOTO SAYA */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="images" size={14} color="#D7FF00" style={{ marginRight: 6 }} />
-            <Text style={styles.sectionTitle}>POSTINGAN & FOTO SAYA</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.addPostSmallBtn}
-            onPress={() => (navigation as any).navigate('CreatePost')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add" size={14} color="#000000" style={{ marginRight: 2 }} />
-            <Text style={styles.addPostSmallBtnText}>+ Buat Post</Text>
-          </TouchableOpacity>
-        </View>
-
-        {myPosts.length === 0 ? (
-          <View style={styles.emptyPostCard}>
-            <Ionicons name="camera-outline" size={32} color="#71717A" />
-            <Text style={styles.emptyPostTitle}>Belum Ada Foto Terunggah</Text>
-            <Text style={styles.emptyPostSub}>Foto momen lari atau olahragamu akan muncul di sini.</Text>
-            <TouchableOpacity 
-              style={styles.emptyAddPostBtn}
-              onPress={() => (navigation as any).navigate('CreatePost')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.emptyAddPostBtnText}>+ Posting Foto Pertama</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.myPostsGrid}>
-            {myPosts.map((p) => (
-              <View key={p.id} style={styles.myPostThumbWrapper}>
-                {p.image_url ? (
-                  <Image source={{ uri: p.image_url }} style={styles.myPostThumbImage} resizeMode="cover" />
-                ) : (
-                  <View style={styles.myPostTextOnlyBox}>
-                    <Text style={styles.myPostTextOnly} numberOfLines={3}>{p.caption}</Text>
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
+      )}
 
       {/* FOOTER APP BRANDING */}
       <View style={styles.footerBranding}>
         <Text style={styles.brandTitle}>FLEX PACE</Text>
-        <Text style={styles.brandVersion}>v1.0.0 • Designed for Athletes</Text>
+        <Text style={styles.brandVersion}>v1.0.1 • Designed for Athletes</Text>
       </View>
+    </ScrollView>
+
+    {/* MODAL SETELAN & PRIVASI (BOTTOM SHEET) */}
+    <Modal
+      visible={settingsModalVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setSettingsModalVisible(false)}
+    >
+      <TouchableOpacity 
+        style={styles.modalBackdrop} 
+        activeOpacity={1} 
+        onPress={() => setSettingsModalVisible(false)}
+      >
+        <View style={styles.settingsSheetCard}>
+          <View style={styles.sheetHandle} />
+
+          <View style={styles.sheetHeaderRow}>
+            <Text style={styles.sheetTitle}>PENGATURAN & PRIVASI</Text>
+            <TouchableOpacity onPress={() => setSettingsModalVisible(false)}>
+              <Ionicons name="close" size={22} color="#A1A1AA" />
+            </TouchableOpacity>
+          </View>
+
+          {/* KONTROL PRIVASI */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>PRIVASI AKTIVITAS</Text>
+
+            <View style={styles.settingItemRow}>
+              <View style={styles.settingItemLeft}>
+                <Ionicons name="lock-closed-outline" size={18} color="#D7FF00" style={{ marginRight: 10 }} />
+                <View>
+                  <Text style={styles.settingItemTitle}>Akun Privat</Text>
+                  <Text style={styles.settingItemSub}>Hanya pengikut yang melihat aktivitas</Text>
+                </View>
+              </View>
+              <Switch
+                value={isPrivateAccount}
+                onValueChange={togglePrivateAccount}
+                trackColor={{ false: '#26262E', true: '#D7FF00' }}
+                thumbColor={isPrivateAccount ? '#000000' : '#8E8E93'}
+              />
+            </View>
+
+            <View style={styles.settingItemRow}>
+              <View style={styles.settingItemLeft}>
+                <Ionicons name="eye-off-outline" size={18} color="#D7FF00" style={{ marginRight: 10 }} />
+                <View>
+                  <Text style={styles.settingItemTitle}>Sembunyikan Jalur Peta</Text>
+                  <Text style={styles.settingItemSub}>Privasi lokasi rute di feed</Text>
+                </View>
+              </View>
+              <Switch
+                value={hideGpsRoute}
+                onValueChange={toggleHideGpsRoute}
+                trackColor={{ false: '#26262E', true: '#D7FF00' }}
+                thumbColor={hideGpsRoute ? '#000000' : '#8E8E93'}
+              />
+            </View>
+
+            <View style={styles.settingItemRow}>
+              <View style={styles.settingItemLeft}>
+                <Ionicons name="fitness-outline" size={18} color="#D7FF00" style={{ marginRight: 10 }} />
+                <View>
+                  <Text style={styles.settingItemTitle}>Sembunyikan Biometrik</Text>
+                  <Text style={styles.settingItemSub}>Sembunyikan kalori & heart rate</Text>
+                </View>
+              </View>
+              <Switch
+                value={hideBiometrics}
+                onValueChange={toggleHideBiometrics}
+                trackColor={{ false: '#26262E', true: '#D7FF00' }}
+                thumbColor={hideBiometrics ? '#000000' : '#8E8E93'}
+              />
+            </View>
+          </View>
+
+          {/* TAUTAN & AKUN */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>LAINNYA</Text>
+
+            <TouchableOpacity 
+              style={styles.settingActionRow}
+              onPress={() => {
+                setSettingsModalVisible(false);
+                handleCopyProfileLink();
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.settingItemLeft}>
+                <Ionicons name="copy-outline" size={18} color="#D7FF00" style={{ marginRight: 10 }} />
+                <Text style={styles.settingActionText}>Salin Tautan Pintar Profil</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#71717A" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.settingActionRow, { marginTop: 4 }]}
+              onPress={() => {
+                setSettingsModalVisible(false);
+                handleLogout();
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.settingItemLeft}>
+                <Ionicons name="log-out-outline" size={18} color="#FF453A" style={{ marginRight: 10 }} />
+                <Text style={[styles.settingActionText, { color: '#FF453A' }]}>Keluar dari Akun (Logout)</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#71717A" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
 
       {/* MODAL SUBSCRIPTION GATEWAY MEMBERSHIP PRO */}
       <Modal
@@ -1002,7 +990,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -1021,13 +1009,23 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+  compactHeaderCard: {
+    backgroundColor: '#131317',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    padding: 18,
+    marginBottom: 14,
+    position: 'relative',
+    overflow: 'hidden',
+  },
   profileHeaderCard: {
     backgroundColor: '#131317',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.07)',
-    padding: 20,
-    marginBottom: 20,
+    padding: 18,
+    marginBottom: 14,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -1040,35 +1038,82 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     backgroundColor: 'rgba(215, 255, 0, 0.06)',
   },
-  avatarRow: {
+  avatarStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: 16,
+    marginRight: 12,
   },
   avatar: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: '#1E1E24',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: '#D7FF00',
   },
   onlineBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: '#30D158',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: '#131317',
   },
-  headerInfo: {
+  vipBadgeFloat: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#FFD700',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#131317',
+  },
+  quickStatsBox: {
     flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  quickStatCol: {
+    alignItems: 'center',
+  },
+  quickStatVal: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+  quickStatLbl: {
+    color: '#71717A',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  quickStatDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  identityBox: {
+    marginBottom: 12,
   },
   nameRow: {
     flexDirection: 'row',
@@ -1076,155 +1121,401 @@ const styles = StyleSheet.create({
   },
   displayName: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0.2,
   },
   handleText: {
     color: '#71717A',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
   },
-  badgeRow: {
+  vipCrownBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
   },
-  capsuleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  capsuleText: {
-    color: '#A1A1AA',
+  vipCrownText: {
+    color: '#000000',
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '900',
   },
   organizerBadge: {
-    backgroundColor: 'rgba(215, 255, 0, 0.12)',
+    backgroundColor: 'rgba(215, 255, 0, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+    borderWidth: 1,
     borderColor: 'rgba(215, 255, 0, 0.3)',
   },
   organizerText: {
     color: '#D7FF00',
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  premiumBadge: {
-    backgroundColor: '#FFD60A',
-    borderColor: '#FFD60A',
-  },
-  premiumText: {
-    color: '#000000',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  bioContainer: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   bioText: {
     color: '#D4D4D8',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '400',
+    marginTop: 6,
   },
   emptyBioPrompt: {
-    marginTop: 14,
-    paddingVertical: 8,
+    marginTop: 6,
   },
   emptyBioText: {
     color: '#D7FF00',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 6,
   },
   editButton: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D7FF00',
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginRight: 6,
+  },
+  editButtonText: {
+    color: '#000000',
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
+  shareButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E1E26',
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  shareButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: '#1E1E26',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  tabsHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#131317',
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  tabBtnActive: {
+    backgroundColor: '#D7FF00',
+  },
+  tabBtnText: {
+    color: '#71717A',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  tabBtnTextActive: {
+    color: '#000000',
+    fontWeight: '900',
+  },
+  tabContentContainer: {
+    marginBottom: 16,
+  },
+  myPostsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  myPostThumbWrapper: {
+    width: GRID_THUMB_SIZE,
+    height: GRID_THUMB_SIZE,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#191920',
+  },
+  myPostThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  myPostTextOnlyBox: {
+    flex: 1,
+    padding: 8,
+    justifyContent: 'center',
+    backgroundColor: '#191920',
+  },
+  myPostTextOnly: {
+    color: '#D4D4D8',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  emptyPostCard: {
+    backgroundColor: '#131317',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  emptyCameraIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#1C1C24',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  emptyPostTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  emptyPostSub: {
+    color: '#71717A',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  emptyAddPostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D7FF00',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+  },
+  emptyAddPostBtnText: {
+    color: '#000000',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  vipStatusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A180E',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  vipStatusTitle: {
+    color: '#FFD700',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  vipStatusSub: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  vipPillBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  vipPillText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  compactUpgradeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#181820',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.25)',
+  },
+  compactUpgradeTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  compactUpgradeSub: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  compactUpgradeBtn: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  compactUpgradeBtnText: {
+    color: '#000000',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  aiLabCompactCard: {
+    backgroundColor: '#131317',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    marginTop: 4,
+  },
+  aiLabCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  aiLabCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  aiLabCardSub: {
+    color: '#71717A',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  unlockedPill: {
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+  },
+  unlockedPillText: {
+    color: '#FFD700',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  lockedPill: {
+    backgroundColor: '#1E1E26',
+    padding: 5,
+    borderRadius: 8,
+  },
+  aiOpenBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#D7FF00',
     paddingVertical: 11,
-    borderRadius: 16,
-    marginRight: 10,
-    shadowColor: '#D7FF00',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
+    borderRadius: 14,
+    marginTop: 12,
   },
-  editButtonText: {
+  aiOpenBtnText: {
     color: '#000000',
-    fontWeight: '800',
-    fontSize: 14,
-    letterSpacing: 0.2,
-  },
-  iconActionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: '#1E1E26',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  logoutIconBtn: {
-    backgroundColor: 'rgba(255, 69, 58, 0.1)',
-    borderColor: 'rgba(255, 69, 58, 0.2)',
-    marginRight: 0,
-  },
-  inviteFriendsBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#191920',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(215, 255, 0, 0.2)',
-  },
-  inviteBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  inviteIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#D7FF00',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  inviteBannerTitle: {
-    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
-  inviteBannerSub: {
+  settingsSheetCard: {
+    backgroundColor: '#141419',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#333338',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  settingsSection: {
+    marginBottom: 14,
+    backgroundColor: '#191920',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  settingsSectionTitle: {
+    color: '#71717A',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  settingItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  settingItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  settingItemTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  settingItemSub: {
     color: '#71717A',
     fontSize: 11,
     marginTop: 1,
+  },
+  settingActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  settingActionText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   // SECTION STYLES
@@ -1354,21 +1645,6 @@ const styles = StyleSheet.create({
   },
   avatarVip: {
     borderColor: '#FFD700',
-  },
-  vipCrownBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8,
-  },
-  vipCrownText: {
-    color: '#000000',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.5,
   },
 
   // VIP MEMBERSHIP CARD (ACTIVE)
@@ -2044,67 +2320,5 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 11,
     fontWeight: '800',
-  },
-  emptyPostCard: {
-    backgroundColor: '#121217',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  emptyPostTitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  emptyPostSub: {
-    color: '#71717A',
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  emptyAddPostBtn: {
-    backgroundColor: '#1E1E28',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(215, 255, 0, 0.3)',
-  },
-  emptyAddPostBtnText: {
-    color: '#D7FF00',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  myPostsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  myPostThumbWrapper: {
-    width: '31%',
-    aspectRatio: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#181820',
-  },
-  myPostThumbImage: {
-    width: '100%',
-    height: '100%',
-  },
-  myPostTextOnlyBox: {
-    flex: 1,
-    padding: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#181820',
-  },
-  myPostTextOnly: {
-    color: '#A1A1AA',
-    fontSize: 10,
-    textAlign: 'center',
   },
 });
